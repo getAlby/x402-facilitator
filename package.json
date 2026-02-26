@@ -1,0 +1,17 @@
+{
+  "name": "x402-lightning-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "e2e": "tsx e2e-test.ts"
+  },
+  "dependencies": {
+    "@getalby/sdk": "^7.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
