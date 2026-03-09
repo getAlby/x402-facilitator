@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>x402 Bitcoin Payments</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;1,14..32,300&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #fff;
+      --bg-soft: #f9f9f8;
+      --border: #e8e8e6;
+      --border-mid: #d4d4d0;
+      --text: #111;
+      --text-2: #666;
+      --text-3: #aaa;
+      --serif: "Instrument Serif", Georgia, serif;
+      --sans:  "Inter", -apple-system, sans-serif;
+      --mono:  "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      font-feature-settings: "cv02","cv03","cv04","cv11";
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.9);
+      backdrop-filter: blur(16px);
+      height: 52px;
+    }
+    .nav-inner {
+      max-width: 960px; margin: 0 auto; padding: 0 2.5rem;
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--sans); font-weight: 500; font-size: 14px;
+    }
+    .nav-tag {
+      font-family: var(--mono); font-size: 9.5px; font-weight: 400;
+      color: var(--text-3); letter-spacing: 0.1em;
+      border: 1px solid var(--border-mid);
+      padding: 2px 7px; border-radius: 3px;
+    }
+    .nav-links { display: flex; align-items: center; gap: 1.75rem; }
+    .nav-links a { color: var(--text-2); font-size: 13px; font-weight: 400; transition: color 0.12s; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-links .btn-dark { color: #fff; }
+    .nav-links .btn-dark:hover { color: #fff; }
+
+    /* ── LAYOUT ── */
+    .container { max-width: 960px; margin: 0 auto; padding: 0 2.5rem; }
+    section { padding: 5.5rem 0; border-bottom: 1px solid var(--border); }
+
+    /* ── HERO ── */
+    .hero { padding: 6rem 0 5.5rem; border-bottom: 1px solid var(--border); }
+    .hero-label {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--mono); font-size: 11px; color: var(--text-3);
+      margin-bottom: 2.5rem;
+    }
+    .live-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: #22c55e; display: inline-block;
+    }
+    .hero h1 {
+      font-family: var(--serif);
+      font-size: clamp(3rem, 6vw, 5rem);
+      font-weight: 400;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      max-width: 680px;
+      margin-bottom: 1.75rem;
+    }
+    .hero h1 em {
+      font-style: italic;
+      color: var(--text-2);
+    }
+    .hero-sub {
+      font-size: 1rem; color: var(--text-2); font-weight: 400;
+      max-width: 440px; line-height: 1.75;
+      margin-bottom: 2.5rem;
+    }
+    .hero-actions { display: flex; gap: 10px; align-items: center; margin-bottom: 4rem; }
+    .btn-dark {
+      background: var(--text); color: #fff;
+      font-family: var(--sans); font-size: 13px; font-weight: 500;
+      padding: 9px 22px; border-radius: 7px;
+      transition: opacity 0.12s;
+    }
+    .btn-dark:hover { opacity: 0.7; }
+    .btn-text {
+      font-size: 13px; color: var(--text-2);
+      padding: 9px 4px; transition: color 0.12s;
+    }
+    .btn-text:hover { color: var(--text); }
+
+    /* ── CODE BLOCK ── */
+    .code-block {
+      background: var(--bg-soft);
+      border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+    }
+    .code-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+    }
+    .code-dots { display: flex; gap: 5px; }
+    .code-dots i {
+      display: block; width: 9px; height: 9px; border-radius: 50%;
+      background: var(--border-mid);
+    }
+    .code-label { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); }
+    .code-body {
+      padding: 1.4rem 1.6rem;
+      font-family: var(--mono); font-size: 12px; line-height: 1.85;
+      color: #444; overflow-x: auto;
+    }
+    .c0 { color: var(--text-3); }       /* comment */
+    .c1 { color: #6366f1; }              /* key */
+    .c2 { color: #0d9488; }              /* string */
+    .c3 { color: #111; font-weight:600;} /* command */
+
+    /* ── DIVIDER TEXT ── */
+    .divider-quote {
+      padding: 4.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .divider-quote blockquote {
+      font-family: var(--serif);
+      font-size: clamp(1.6rem, 3.2vw, 2.4rem);
+      font-weight: 400; font-style: italic;
+      color: var(--text-2);
+      line-height: 1.4;
+      max-width: 720px;
+    }
+    .divider-quote blockquote strong {
+      color: var(--text); font-style: normal; font-weight: 400;
+    }
+
+    .eyebrow {
+      font-family: var(--mono); font-size: 10px; font-weight: 400;
+      color: var(--text-3); letter-spacing: 0.12em; text-transform: uppercase;
+      display: block; margin-bottom: 1rem;
+    }
+    h2 {
+      font-family: var(--serif);
+      font-size: clamp(1.8rem, 3vw, 2.5rem);
+      font-weight: 400; line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+    .lead {
+      font-size: 0.95rem; color: var(--text-2); line-height: 1.75;
+      max-width: 380px;
+    }
+
+    /* ── HOW IT WORKS GRID ── */
+    .how-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 4rem; margin-top: 3rem; padding-top: 3rem;
+      border-top: 1px solid var(--border);
+    }
+    .how-col-head { margin-bottom: 2rem; }
+    .how-tag {
+      font-family: var(--mono); font-size: 10px; font-weight: 500;
+      color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase;
+      display: block; margin-bottom: 0.6rem;
+      border-left: 2px solid var(--border-mid); padding-left: 0.75rem;
+    }
+    .how-sub { font-size: 13px; color: var(--text-2); line-height: 1.65; padding-left: 0.75rem; }
+
+    /* ── FLOW ── */
+    .flow { display: flex; flex-direction: column; }
+    .flow-step {
+      display: grid; grid-template-columns: 24px 1fr;
+      gap: 0 1.25rem;
+    }
+    .flow-col { display: flex; flex-direction: column; align-items: center; padding-top: 2px; }
+    .flow-n {
+      width: 20px; height: 20px; border-radius: 50%;
+      border: 1px solid var(--border-mid);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 9px; color: var(--text-3);
+      flex-shrink: 0; background: var(--bg); position: relative; z-index: 1;
+    }
+    .flow-ln {
+      width: 1px; flex: 1; min-height: 20px; background: var(--border);
+    }
+    .flow-step:last-child .flow-ln { display: none; }
+    .flow-body { padding: 0 0 1.75rem; }
+    .flow-step:last-child .flow-body { padding-bottom: 0; }
+    .flow-body h3 {
+      font-family: var(--sans); font-size: 13.5px; font-weight: 500;
+      color: var(--text); margin-bottom: 3px;
+    }
+    .flow-body p { font-size: 12.5px; color: var(--text-2); line-height: 1.65; }
+    .pill {
+      display: inline-block; font-family: var(--mono); font-size: 10.5px;
+      color: var(--text-2); background: var(--bg-soft);
+      border: 1px solid var(--border); padding: 1px 7px; border-radius: 4px;
+    }
+
+    /* ── ENDPOINTS TABLE ── */
+    .ep-table {
+      margin-top: 3rem;
+      border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    }
+    .ep {
+      display: grid; grid-template-columns: 52px 1fr auto;
+      gap: 0 1.25rem; align-items: baseline;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+    .ep:last-child { border-bottom: none; }
+    .ep:hover { background: var(--bg-soft); }
+    .m { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; }
+    .m-post { color: #2563eb; }
+    .m-get  { color: #16a34a; }
+    .ep-path { font-family: var(--mono); font-size: 12.5px; font-weight: 500; margin-bottom: 2px; }
+    .ep-desc { font-size: 12px; color: var(--text-2); line-height: 1.5; }
+    .ep-tag {
+      font-family: var(--mono); font-size: 10px; color: var(--text-3);
+      border: 1px solid var(--border); padding: 2px 8px; border-radius: 3px;
+      white-space: nowrap; align-self: center;
+    }
+
+    /* ── FEATURE GRID ── */
+    .feat-grid {
+      display: grid; grid-template-columns: repeat(3,1fr);
+      margin-top: 3.5rem;
+      border-top: 1px solid var(--border);
+      border-left: 1px solid var(--border);
+    }
+    .feat {
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 1.75rem;
+    }
+    .feat-n {
+      font-family: var(--mono); font-size: 10px; color: var(--text-3);
+      margin-bottom: 1rem; display: block;
+    }
+    .feat h3 {
+      font-family: var(--sans); font-size: 13.5px; font-weight: 500;
+      margin-bottom: 0.5rem; letter-spacing: -0.01em;
+    }
+    .feat p { font-size: 12.5px; color: var(--text-2); line-height: 1.7; }
+    .feat p code { font-family: var(--mono); font-size: 11px; }
+
+    /* ── CTA STRIP ── */
+    .cta-strip {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 2rem; flex-wrap: wrap;
+      margin-top: 3.5rem;
+      padding: 2.5rem 2.5rem;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--bg-soft);
+    }
+    .cta-strip h3 {
+      font-family: var(--serif); font-size: 1.5rem; font-weight: 400;
+      letter-spacing: -0.02em; margin-bottom: 0.35rem;
+    }
+    .cta-strip p { font-size: 13px; color: var(--text-2); line-height: 1.65; }
+    .cta-btns { display: flex; gap: 10px; flex-shrink: 0; }
+    .btn-outline {
+      border: 1px solid var(--border-mid); color: var(--text);
+      font-size: 13px; font-weight: 400;
+      padding: 8px 20px; border-radius: 7px;
+      transition: border-color 0.12s;
+    }
+    .btn-outline:hover { border-color: var(--text-2); }
+
+    /* ── REASON GRID ── */
+    .reason-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      column-gap: 5rem; margin-top: 3rem;
+    }
+    .reason { padding: 1.75rem 0; border-top: 1px solid var(--border); }
+    .reason h3 {
+      font-family: var(--serif); font-size: 1.35rem; font-weight: 400;
+      font-style: italic; letter-spacing: -0.01em; line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+    .reason p { font-size: 13px; color: var(--text-2); line-height: 1.75; }
+    @media (max-width: 720px) { .reason-grid { grid-template-columns: 1fr; } }
+
+    /* ── FAQ ── */
+    .faq-list { margin-top: 3rem; }
+    .faq-item { border-top: 1px solid var(--border); padding: 1.25rem 0; }
+    .faq-list .faq-item:last-child { border-bottom: 1px solid var(--border); }
+    .faq-q {
+      font-size: 15px; font-weight: 500; color: var(--text);
+      cursor: pointer; user-select: none;
+      display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+    }
+    .faq-q::after {
+      content: "+"; font-family: var(--mono); font-size: 16px; font-weight: 300;
+      color: var(--text-3); flex-shrink: 0; transition: color 0.12s;
+    }
+    .faq-item.open .faq-q::after { content: "−"; }
+    .faq-item:hover .faq-q::after { color: var(--text-2); }
+    .faq-a {
+      font-size: 13.5px; color: var(--text-2); line-height: 1.8; max-width: 680px;
+      overflow: hidden; max-height: 0;
+      transition: max-height 0.28s ease, padding-top 0.28s ease;
+    }
+    .faq-item.open .faq-a { max-height: 300px; padding-top: 0.65rem; }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 1.75rem 2.5rem;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 1rem;
+    }
+    .f-left { font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+    .f-right { display: flex; gap: 1.75rem; }
+    .f-right a { font-size: 12.5px; color: var(--text-3); transition: color 0.12s; }
+    .f-right a:hover { color: var(--text-2); }
+
+    @media (max-width: 720px) {
+      .container { padding: 0 1.5rem; }
+      .nav-inner { padding: 0 1.5rem; }
+      .nav-links { display: none; }
+      section { padding: 4rem 0; }
+      .hero { padding: 4.5rem 0 4rem; }
+      .how-grid { grid-template-columns: 1fr; gap: 3rem; }
+      .feat-grid { grid-template-columns: 1fr 1fr; }
+      .feat:nth-child(2n+1):last-child { grid-column: span 2; }
+      .ep { grid-template-columns: 48px 1fr; }
+      .ep-tag { display: none; }
+      .cta-strip { padding: 2rem; }
+      footer { padding: 1.5rem; }
+    }
+    @media (max-width: 480px) {
+      .feat-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-inner">
+    <div class="nav-logo">
+      <img src="/alby-logo.svg" alt="Alby" height="20" style="display:block;">
+      <span style="color:var(--border);font-weight:300;font-size:16px;line-height:1;margin:0 2px;">|</span>
+      x402 <span class="nav-tag">BITCOIN</span>
+    </div>
+    <div class="nav-links">
+      <a href="#how-it-works">How it works</a>
+      <a href="#api">API</a>
+      <a href="https://github.com/coinbase/x402" target="_blank" rel="noopener">Spec</a>
+      <a href="/demo/quote" class="btn-dark">Try demo</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="container">
+    <div class="hero-label">
+      <span class="live-dot"></span>
+      live on mainnet
+    </div>
+    <h1>Bitcoin payments,<br/><em>built into HTTP</em></h1>
+    <p class="hero-sub">
+      Sell access to any API endpoint and get paid in Bitcoin — instantly, without accounts, without middlemen. One registration, one line of middleware.
+    </p>
+    <div class="hero-actions">
+      <a href="/demo/quote" class="btn-dark">Try the demo</a>
+      <a href="#how-it-works" class="btn-text">How it works →</a>
+    </div>
+
+    <div class="code-block">
+      <div class="code-top">
+        <div class="code-dots"><i></i><i></i><i></i></div>
+        <span class="code-label">register &amp; accept payments</span>
+      </div>
+      <div class="code-body">
+        <span class="c0"># 1. Register your Lightning wallet (one-time)</span><br/>
+        <span class="c3">curl</span> -X POST https://x402.albylabs.com/register \<br/>
+        &nbsp;&nbsp;-d <span class="c2">'{"nwcSecret":"nostr+walletconnect://..."}'</span><br/>
+        <span class="c0">#&nbsp;&nbsp;→ { "merchantId": "3f2a…" }</span><br/>
+        <br/>
+        <span class="c0"># 2. Protect a route on your server</span><br/>
+        <span class="c3">app</span>.<span class="c1">use</span>(<span class="c1">paymentMiddleware</span>({<br/>
+        &nbsp;&nbsp;<span class="c2">"GET /resource"</span>: {<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="c1">scheme</span>: <span class="c2">"exact"</span>,&nbsp;&nbsp;<span class="c1">network</span>: <span class="c2">"lightning:mainnet"</span>,<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="c1">price</span>: { <span class="c1">amount</span>: <span class="c2">"21"</span>, <span class="c1">asset</span>: <span class="c2">"sat"</span> },<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="c1">extra</span>: { <span class="c1">merchantId</span>: <span class="c2">"3f2a…"</span> }<br/>
+        &nbsp;&nbsp;}<br/>
+        }));
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PULL QUOTE -->
+<div class="divider-quote">
+  <div class="container">
+    <blockquote>
+      Money on the internet has always required middlemen. <strong>x402 removes them</strong> — open, instant, machine-native payments, with Bitcoin as the settlement layer.
+    </blockquote>
+  </div>
+</div>
+
+<!-- WHY BITCOIN -->
+<section>
+  <div class="container">
+    <span class="eyebrow">Why Bitcoin</span>
+    <h2>Not all money<br/>is equal</h2>
+    <p class="lead">Bitcoin is the only money that settles instantly, without counterparty, on open rails.</p>
+
+    <div class="reason-grid">
+      <div class="reason">
+        <h3>No issuer risk</h3>
+        <p>Stablecoins are IOUs. A peg can break, an issuer can freeze accounts, a regulator can halt transfers. Bitcoin has no issuer.</p>
+      </div>
+      <div class="reason">
+        <h3>Cryptographic settlement</h3>
+        <p>Payment proof is tamper-proof and final — no chargebacks, no disputes, no reversals. Math, not policy.</p>
+      </div>
+      <div class="reason">
+        <h3>True micropayments</h3>
+        <p>Sub-cent payments at machine speed. Stablecoins on-chain can't do this — fees exceed the payment amount.</p>
+      </div>
+      <div class="reason">
+        <h3>Permissionless by design</h3>
+        <p>No KYC, no jurisdiction restrictions, no sanctions list. Any two parties can transact — globally, instantly, without asking.</p>
+      </div>
+      <div class="reason">
+        <h3>Self-custody by default</h3>
+        <p>Your funds live in your own wallet, not an exchange or custodian. You control your keys — no intermediary holds your money.</p>
+      </div>
+      <div class="reason">
+        <h3>Open protocol, no rent</h3>
+        <p>No smart contract risk, no bridge exploits, no L2 token required. Bitcoin's payment network is natively part of the protocol.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how-it-works">
+  <div class="container">
+    <span class="eyebrow">How it works</span>
+    <h2>For merchants &amp; consumers</h2>
+
+    <div class="how-grid">
+
+      <!-- MERCHANTS -->
+      <div>
+        <div class="how-col-head">
+          <span class="how-tag">For merchants</span>
+          <p class="how-sub">Sell access to any API endpoint — no billing infrastructure required.</p>
+        </div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-col"><div class="flow-n">01</div><div class="flow-ln"></div></div>
+            <div class="flow-body">
+              <h3>Connect your Bitcoin wallet</h3>
+              <p>POST your NWC connection string to <span class="pill">/register</span>. Get back an opaque <span class="pill">merchantId</span> — your credentials stay server-side.</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-col"><div class="flow-n">02</div><div class="flow-ln"></div></div>
+            <div class="flow-body">
+              <h3>Protect a route</h3>
+              <p>Add <span class="pill">paymentMiddleware</span> to your server. Set a price in sats and reference your <span class="pill">merchantId</span> — one line of config.</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-col"><div class="flow-n">03</div></div>
+            <div class="flow-body">
+              <h3>Receive payments automatically</h3>
+              <p>Verified payments settle directly to your wallet. No dashboards, no manual withdrawals.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONSUMERS -->
+      <div>
+        <div class="how-col-head">
+          <span class="how-tag">For API consumers</span>
+          <p class="how-sub">Pay per request with any Bitcoin wallet — no accounts, no subscriptions.</p>
+        </div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-col"><div class="flow-n">01</div><div class="flow-ln"></div></div>
+            <div class="flow-body">
+              <h3>Request a protected resource</h3>
+              <p>Hit the endpoint normally. The server responds <span class="pill">HTTP 402</span> with a payment invoice in the response header.</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-col"><div class="flow-n">02</div><div class="flow-ln"></div></div>
+            <div class="flow-body">
+              <h3>Pay with Bitcoin</h3>
+              <p>Use any compatible Bitcoin wallet. You receive a <span class="pill">preimage</span> — cryptographic proof that the payment settled.</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-col"><div class="flow-n">03</div></div>
+            <div class="flow-body">
+              <h3>Retry with payment proof</h3>
+              <p>Send the preimage in the <span class="pill">payment-signature</span> header. The server verifies instantly and delivers the resource.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- API -->
+<section id="api">
+  <div class="container">
+    <span class="eyebrow">x402 ecosystem</span>
+    <h2>Tap into<br/><em>existing tooling</em></h2>
+    <p class="lead" style="max-width:560px;">
+      This facilitator speaks the standard x402 protocol. Any library, client, or middleware built for x402 works here — no changes needed. Point your existing setup at <code style="font-family:var(--mono);font-size:0.85em;">https://x402.albylabs.com</code> and it just works.
+    </p>
+    <div style="margin-top:2.5rem;display:flex;gap:12px;flex-wrap:wrap;">
+      <a href="https://github.com/coinbase/x402" target="_blank" rel="noopener" class="btn-outline">x402 spec →</a>
+      <a href="/supported" class="btn-outline">View supported networks →</a>
+      <a href="/demo/quote" class="btn-outline">Try the demo →</a>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section>
+  <div class="container">
+    <span class="eyebrow">Design principles</span>
+    <h2>Built for production</h2>
+    <p class="lead">Designed to get out of the way — register once, and everything else is handled for you.</p>
+
+    <div class="feat-grid">
+      <div class="feat">
+        <span class="feat-n">01</span>
+        <h3>Any Bitcoin wallet</h3>
+        <p>Connect any NWC-compatible wallet. Invoices are created and settled on your behalf — no custom integrations, no wallet-specific code.</p>
+      </div>
+      <div class="feat">
+        <span class="feat-n">02</span>
+        <h3>Your keys, your control</h3>
+        <p>Your wallet credentials are stored behind an opaque ID. Clients only ever see the <code>merchantId</code> — never your connection string.</p>
+      </div>
+      <div class="feat">
+        <span class="feat-n">03</span>
+        <h3>No billing infrastructure</h3>
+        <p>No payment processor, no webhook, no dashboard. Register a wallet and protect a route — that's the entire setup.</p>
+      </div>
+      <div class="feat">
+        <span class="feat-n">04</span>
+        <h3>Private by design</h3>
+        <p>Lightning payments leave no on-chain trace. No wallet address, no transaction hash, no public ledger entry — just a cryptographic preimage known only to the parties involved.</p>
+      </div>
+      <div class="feat">
+        <span class="feat-n">05</span>
+        <h3>Access in milliseconds</h3>
+        <p>The moment a payment settles, the resource is delivered. No confirmation windows, no polling, no redirects.</p>
+      </div>
+      <div class="feat">
+        <span class="feat-n">06</span>
+        <h3>Open standard</h3>
+        <p>Built on the open x402 spec. Compatible with any x402 client or resource server — not locked to this facilitator.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section>
+  <div class="container">
+    <span class="eyebrow">Get started</span>
+    <h2>Start accepting<br/><em style="font-style:italic;color:var(--text-2)">Bitcoin payments</em></h2>
+    <p class="lead" style="margin-bottom:0;">
+      Register your Lightning wallet and add one middleware call to your Express server.
+    </p>
+
+    <div class="cta-strip">
+      <div>
+        <h3>Try the live demo</h3>
+        <p>
+          Hit <code style="font-family:var(--mono);font-size:11.5px;">/demo/quote</code> — a real HTTP 402 with a BOLT11 invoice.
+          Pay with any Lightning wallet to unlock a Satoshi Nakamoto quote.
+        </p>
+      </div>
+      <div class="cta-btns">
+        <a href="/demo/quote" class="btn-dark">Open demo</a>
+        <a href="/supported" class="btn-outline">View supported</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section style="border-bottom:none;padding-bottom:5rem;">
+  <div class="container">
+    <span class="eyebrow">FAQ</span>
+    <h2>Common questions</h2>
+
+    <div class="faq-list">
+
+      <div class="faq-item">
+        <div class="faq-q">What is x402?</div>
+        <div class="faq-a">x402 is an open protocol that brings payments directly into HTTP. A server returns a standard <em>402 Payment Required</em> response with payment details; the client pays and retries the request. No billing pages, no OAuth, no subscriptions — just a single round-trip. This facilitator implements the protocol for Bitcoin Lightning.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Why Lightning? All the other x402 facilitators use USDC or Solana.</div>
+        <div class="faq-a">The existing x402 facilitators are built for EVM chains — faster than traditional rails, but still dependent on gas, custodial bridges, and stablecoin issuers. Lightning is different: payments settle in milliseconds with no gas, no peg, no counterparty. It's the only rail where settlement is cryptographically final and trustless — and where sub-cent micropayments are actually viable.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Why are there no public payment stats or transaction counts?</div>
+        <div class="faq-a">Lightning payments are private by design. Unlike on-chain Bitcoin or Ethereum, Lightning transactions don't appear on a public ledger — they route through the network without a permanent record. The only proof of payment is the preimage, known only to the parties involved. There is nothing to aggregate or display. That's a feature, not a limitation.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Do I need to run my own Lightning node?</div>
+        <div class="faq-a">No. Any NWC-compatible wallet works — Alby Hub, Mutiny, Zeus, and others. If you already have a Lightning wallet with NWC support, you're ready. You don't need to manage channels, liquidity, or routing.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Is this compatible with standard @x402 clients and libraries?</div>
+        <div class="faq-a">Yes, fully. This facilitator implements the standard x402 interface — any client or resource server built against the spec works without Lightning-specific changes. The Lightning-specific logic (invoice generation, NWC settlement) is handled entirely server-side, transparent to the client.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">What happens if a Lightning invoice expires?</div>
+        <div class="faq-a">Lightning invoices are short-lived by design (typically a few minutes). If a client pays too late, the server issues a fresh invoice on the next request. The client simply retries — no partial payments, no stuck funds, no manual intervention required.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">How is this different from Stripe or a traditional payment API?</div>
+        <div class="faq-a">Stripe requires buyers to have an account, a card, and a billing address — and takes a percentage of every transaction. Here, buyers need only a Lightning wallet. There's no sign-up, no redirect, no KYC, no chargeback risk. Payments happen inside the HTTP request itself, and settlement is final the moment the preimage is verified.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<script>
+  document.querySelectorAll('.faq-q').forEach(function(q) {
+    q.addEventListener('click', function() {
+      q.closest('.faq-item').classList.toggle('open');
+    });
+  });
+</script>
+
+<footer>
+  <span class="f-left">x402.albylabs.com &nbsp;·&nbsp; bitcoin mainnet</span>
+  <div class="f-right">
+    <a href="https://github.com/coinbase/x402" target="_blank" rel="noopener">x402 spec</a>
+    <a href="https://nwc.dev" target="_blank" rel="noopener">NWC</a>
+    <a href="https://getalby.com" target="_blank" rel="noopener">Alby</a>
+    <a href="/health">health</a>
+  </div>
+</footer>
+
+</body>
+</html>

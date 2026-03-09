@@ -3,7 +3,7 @@ import { LightningExactScheme } from "./lightning/scheme";
 
 export function createFacilitator(): x402Facilitator {
   return new x402Facilitator().register(
-    ["lightning:mainnet", "lightning:testnet"],
+    "lightning:mainnet",
     new LightningExactScheme(),
   );
 }

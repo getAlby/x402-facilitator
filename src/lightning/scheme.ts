@@ -3,7 +3,7 @@ import type { SchemeNetworkFacilitator, FacilitatorContext } from "@x402/core/ty
 import type { VerifyResponse, SettleResponse } from "@x402/core/types";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import type { Network } from "@x402/core/types";
-import { getInvoice, deleteInvoice } from "./invoice-store";
+import { getInvoice, deleteInvoice, acquireSettleLock, releaseSettleLock } from "./invoice-store";
 import { lookupInvoice } from "./nwc-client";
 
 export class LightningExactScheme implements SchemeNetworkFacilitator {
@@ -65,7 +65,7 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
     }
 
     // Check invoice exists in store
-    const stored = getInvoice(extra.paymentHash);
+    const stored = await getInvoice(extra.paymentHash);
     if (!stored) {
       return {
         isValid: false,
@@ -85,8 +85,8 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
     }
 
     // Check amount — allow overpayment, reject underpayment
-    const requiredMsats = Number(requirements.amount) * 1000;
-    if (stored.amountMsats < requiredMsats) {
+    const requiredMsats = BigInt(requirements.amount) * 1000n;
+    if (BigInt(stored.amountMsats) < requiredMsats) {
       return {
         isValid: false,
         invalidReason: "amount_too_low",
@@ -94,7 +94,7 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
       };
     }
 
-    return { isValid: true };
+    return { isValid: true, payer: extra.paymentHash };
   }
 
   async settle(
@@ -105,25 +105,53 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
     const { preimage } = payload.payload as { preimage: string };
     const extra = requirements.extra as { paymentHash: string };
 
-    // Retrieve the stored invoice to get the merchant's NWC URL
-    const stored = getInvoice(extra.paymentHash);
+    // Retrieve the stored invoice to get the merchant's NWC connection secret
+    const stored = await getInvoice(extra.paymentHash);
     if (!stored) {
-      throw new Error("Invoice not found — cannot confirm settlement");
+      return {
+        success: false,
+        errorReason: "invoice_not_found",
+        errorMessage: "Invoice not found or already settled",
+        transaction: "",
+        network: requirements.network,
+      };
     }
 
-    // Confirm the invoice is paid via the merchant's NWC wallet
-    const result = await lookupInvoice(stored.nwcUrl, extra.paymentHash);
-    if (!result.settledAt) {
-      throw new Error("Invoice is not settled — payment has not been received");
+    // Atomic lock: prevent double-settle for the same invoice
+    const locked = await acquireSettleLock(extra.paymentHash);
+    if (!locked) {
+      return {
+        success: false,
+        errorReason: "settle_in_progress",
+        errorMessage: "Settlement already in progress for this invoice",
+        transaction: "",
+        network: requirements.network,
+      };
     }
 
-    // Remove from the invoice store
-    deleteInvoice(extra.paymentHash);
+    try {
+      // Confirm the invoice is paid via the merchant's NWC wallet
+      const result = await lookupInvoice(stored.nwcSecret, extra.paymentHash);
+      if (!result.settledAt) {
+        return {
+          success: false,
+          errorReason: "payment_not_received",
+          errorMessage: "Invoice is not settled — payment has not been received",
+          transaction: "",
+          network: requirements.network,
+        };
+      }
 
-    return {
-      success: true,
-      transaction: preimage, // preimage is the canonical proof of payment in Lightning
-      network: requirements.network,
-    };
+      await deleteInvoice(extra.paymentHash);
+
+      return {
+        success: true,
+        transaction: preimage, // preimage is the canonical proof of payment in Lightning
+        network: requirements.network,
+        payer: extra.paymentHash, // node pubkey not reliably available via NWC; use paymentHash as payer identity
+      };
+    } finally {
+      await releaseSettleLock(extra.paymentHash);
+    }
   }
 }

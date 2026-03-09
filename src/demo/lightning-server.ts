@@ -1,5 +1,6 @@
 import type { SchemeNetworkServer } from "@x402/core/types";
 import type { PaymentRequirements, Network, Price, AssetAmount } from "@x402/core/types";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import { requestContext } from "./request-context";
 
 interface InvoiceResponse {
@@ -14,9 +15,9 @@ interface InvoiceResponse {
  * which is called per-request to generate a fresh BOLT11 invoice and inject it into
  * the PaymentRequirements.extra field of each 402 response.
  *
- * Multi-tenant: the merchant's NWC URL is read from requirements.extra.nwcUrl and
- * forwarded to the facilitator's POST /invoice endpoint so each merchant's invoice
- * is created against their own wallet.
+ * Multi-tenant: the merchant's opaque merchantId is read from requirements.extra.merchantId
+ * and forwarded to the facilitator's POST /invoice endpoint, which looks up the NWC
+ * connection secret server-side without exposing it to clients.
  */
 export class LightningSchemeNetworkServer implements SchemeNetworkServer {
   readonly scheme = "exact";
@@ -34,12 +35,11 @@ export class LightningSchemeNetworkServer implements SchemeNetworkServer {
       return { amount: String(Math.round(price)), asset: "sat" };
     }
 
-    // String "$X.XX" style — rough USD→sats conversion for demo purposes
+    // String "$X.XX" style — fetch live BTC/USD rate via @getalby/lightning-tools
     if (typeof price === "string" && price.startsWith("$")) {
       const usd = parseFloat(price.slice(1));
       if (isNaN(usd)) throw new Error(`Cannot parse USD price: ${price}`);
-      // ~100,000 sats per dollar (approximate; use a price oracle in production)
-      const sats = Math.round(usd * 100_000);
+      const sats = await getSatoshiValue({ amount: usd, currency: "USD" });
       return { amount: String(sats), asset: "sat" };
     }
 
@@ -53,18 +53,16 @@ export class LightningSchemeNetworkServer implements SchemeNetworkServer {
   ): Promise<PaymentRequirements> {
     const extra = (requirements.extra ?? {}) as Record<string, unknown>;
 
-    // Each merchant must supply their NWC URL in the route's extra.nwcUrl field.
-    const nwcUrl = extra.nwcUrl as string | undefined;
-    if (!nwcUrl) {
+    const merchantId = extra.merchantId as string | undefined;
+    if (!merchantId) {
       throw new Error(
-        "requirements.extra.nwcUrl is required for Lightning payments — " +
-          "set it in the route configuration to the merchant's NWC connection string",
+        "requirements.extra.merchantId is required for Lightning payments — " +
+          "set it in the route configuration to the merchant's ID from POST /register",
       );
     }
 
     // When processing an X-PAYMENT submission, the middleware calls this again to rebuild
-    // requirements for matching. We reuse the already-generated invoice (identified by
-    // paymentHash stored in AsyncLocalStorage) so deepEqual matching succeeds.
+    // requirements for matching. Reuse the already-generated invoice so deepEqual matching succeeds.
     const { paymentHash: existingHash } = requestContext.getStore() ?? {};
     if (existingHash) {
       const response = await fetch(`${this.facilitatorUrl}/invoice/${existingHash}`);
@@ -83,14 +81,20 @@ export class LightningSchemeNetworkServer implements SchemeNetworkServer {
     }
 
     // No existing invoice — generate a fresh BOLT11 invoice via the facilitator.
-    // The merchant's nwcUrl is forwarded so the facilitator creates the invoice
-    // against the correct wallet.
+    // requirements.amount may be an AssetAmount object or a string/number scalar —
+    // extract the numeric satoshi value defensively.
+    const rawAmount = requirements.amount as unknown;
+    const amountSats =
+      typeof rawAmount === "object" && rawAmount !== null && "amount" in rawAmount
+        ? Number((rawAmount as { amount: unknown }).amount)
+        : Number(rawAmount);
+
     const response = await fetch(`${this.facilitatorUrl}/invoice`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        amount: Number(requirements.amount),
-        nwcUrl,
+        amount: amountSats,
+        merchantId,
         description: "x402 payment",
         network: requirements.network,
       }),

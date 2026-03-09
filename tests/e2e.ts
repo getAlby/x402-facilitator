@@ -1,27 +1,28 @@
 /**
- * End-to-end test for the x402 Lightning facilitator + app
+ * End-to-end test for the x402 Lightning facilitator (with embedded demo)
  *
  * Requires:
- *   - app/.env          — MERCHANT_NWC_URL for the merchant/receiver wallet
- *   - .env.sender       — SENDER_NWC_URL for the sender wallet (pays the invoice)
- *   - Facilitator running on http://localhost:3000  (cd facilitator && npm run dev)
- *   - App running on http://localhost:4000          (cd app && npm run dev)
+ *   - .env              — UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN, DEMO_NWC_SECRET
+ *   - .env.sender       — SENDER_NWC_SECRET (wallet that pays the invoice)
+ *   - Facilitator running on http://localhost:3000  (npm run dev)
  *
- * Run: npm run e2e
+ * Run: npm run test:e2e
  */
 
 import dotenv from "dotenv";
 import { NWCClient } from "@getalby/sdk";
 import { createHash } from "crypto";
 
+dotenv.config({ path: ".env" });
 dotenv.config({ path: ".env.sender" });
 
 const FACILITATOR_URL = process.env.FACILITATOR_URL || "http://localhost:3000";
-const APP_URL = process.env.APP_URL || "http://localhost:4000";
-const SENDER_NWC_URL = process.env.SENDER_NWC_URL;
+// After merging the demo into the facilitator, the demo app lives at /demo
+const APP_URL = process.env.APP_URL || `${FACILITATOR_URL}/demo`;
+const SENDER_NWC_SECRET = process.env.SENDER_NWC_SECRET;
 
-if (!SENDER_NWC_URL) {
-  console.error("✗ SENDER_NWC_URL is not set.");
+if (!SENDER_NWC_SECRET) {
+  console.error("✗ SENDER_NWC_SECRET is not set.");
   console.error("  Copy .env.sender.example → .env.sender and fill in your sender wallet.");
   process.exit(1);
 }
@@ -59,11 +60,11 @@ async function main() {
   ok("networks", supported.kinds.map((k: any) => k.network).join(", "));
 
   // ─────────────────────────────────────────────
-  // 2. App GET /resource → 402 with Lightning invoice
+  // 2. Demo GET /resource → 402 with Lightning invoice
   // ─────────────────────────────────────────────
-  section("2. App GET /resource → 402 Payment Required");
+  section("2. Demo GET /quote → 402 Payment Required");
 
-  const resourceRes = await fetch(`${APP_URL}/resource`);
+  const resourceRes = await fetch(`${APP_URL}/quote`);
   if (resourceRes.status !== 402) fail("status", `expected 402, got ${resourceRes.status}`);
   ok("status", 402);
 
@@ -118,7 +119,7 @@ async function main() {
 
   console.log(`  Invoice: ${invoice.slice(0, 60)}...`);
 
-  const senderClient = new NWCClient({ nostrWalletConnectUrl: SENDER_NWC_URL! });
+  const senderClient = new NWCClient({ nostrWalletConnectUrl: SENDER_NWC_SECRET! });
   let preimage!: string;
 
   try {
@@ -169,29 +170,30 @@ async function main() {
   ok("isValid", verifyResult.isValid);
 
   // ─────────────────────────────────────────────
-  // 6. App GET /resource with X-PAYMENT → 200
+  // 6. Demo GET /resource with payment-signature → 200
   // ─────────────────────────────────────────────
-  section("6. App GET /resource with payment-signature → 200");
+  section("6. Demo GET /quote with payment-signature → 200");
 
   const paymentSignatureHeader = b64encode({
     x402Version: 2,
-    resource: paymentRequired.resource,
-    accepted,
+    scheme: accepted.scheme,
+    network: accepted.network,
     payload: { preimage },
+    accepted,
   });
 
-  const paidRes = await fetch(`${APP_URL}/resource`, {
+  const paidRes = await fetch(`${APP_URL}/quote`, {
     headers: { "payment-signature": paymentSignatureHeader },
   });
 
   if (paidRes.status !== 200) {
     const body = await paidRes.text();
-    fail("GET /resource with payment", `expected 200, got ${paidRes.status}: ${body}`);
+    fail("GET /quote with payment", `expected 200, got ${paidRes.status}: ${body}`);
   }
 
   const paidBody = (await paidRes.json()) as any;
   ok("status", 200);
-  ok("message", paidBody.message);
+  ok("quote", paidBody.quote);
 
   section("All tests passed! ✓");
 }
