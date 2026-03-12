@@ -366,7 +366,7 @@ export const lightningPaywallProvider = {
       <div style="position:relative;">
         <pre id="agent-prompt" style="margin:0;white-space:pre-wrap;word-break:break-word;background:#fafaf8;border:1px solid var(--border);border-radius:10px;padding:0.9rem 1rem;font-family:var(--sans);font-size:12.5px;color:var(--text);line-height:1.6;">Load this skill: https://raw.githubusercontent.com/getAlby/alby-cli-skill/refs/heads/master/SKILL.md
 
-Generate a Lightning invoice for $1 USD and present it to the user to fund the wallet. Wait for payment confirmation.
+If the wallet doesn't have any funds, generate a Lightning invoice for $1 USD and present it to the user to fund the wallet. Wait for payment confirmation.
 
 Then fetch this resource (payment is handled automatically via x402): https://x402.albylabs.com/demo/quote
 
