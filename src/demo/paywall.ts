@@ -313,6 +313,7 @@ export const lightningPaywallProvider = {
   <div class="tabs">
     <div class="tab active" id="tab-ts" onclick="switchTab('ts')">TypeScript</div>
     <div class="tab" id="tab-curl" onclick="switchTab('curl')">curl</div>
+    <div class="tab" id="tab-alby" onclick="switchTab('alby')">AI Agents</div>
   </div>
 
   <div class="code-panel active" id="panel-ts">
@@ -355,6 +356,24 @@ export const lightningPaywallProvider = {
   "$PREIMAGE" "$REQS" | base64 -w0)</span>
 <span class="c3">curl</span> https://x402.albylabs.com/demo/quote \\
   -H <span class="c2">"payment-signature: $PAYLOAD"</span></pre>
+  </div>
+
+  <div class="code-panel" id="panel-alby">
+    <div style="padding:1.25rem 1.5rem;display:flex;flex-direction:column;gap:0.85rem;">
+      <p style="font-size:12px;color:var(--text-3);line-height:1.55;margin:0;">
+        Paste this prompt into your AI agent to get started:
+      </p>
+      <div style="position:relative;">
+        <pre id="agent-prompt" style="margin:0;white-space:pre-wrap;word-break:break-word;background:#fafaf8;border:1px solid var(--border);border-radius:10px;padding:0.9rem 1rem;font-family:var(--sans);font-size:12.5px;color:var(--text);line-height:1.6;">Load this skill: https://raw.githubusercontent.com/getAlby/alby-cli-skill/refs/heads/master/SKILL.md
+
+Generate a Lightning invoice for $1 USD and present it to the user to fund the wallet. Wait for payment confirmation.
+
+Then fetch this resource (payment is handled automatically via x402): https://x402.albylabs.com/demo/quote
+
+Print the result.</pre>
+        <button onclick="copyAgentPrompt()" id="copy-agent-btn" style="position:absolute;top:0.6rem;right:0.6rem;font-family:var(--sans);font-size:11px;font-weight:500;color:var(--text-2);background:var(--card);border:1px solid var(--border-mid);border-radius:6px;padding:4px 10px;cursor:pointer;transition:color 0.12s,border-color 0.12s;">Copy</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -459,8 +478,19 @@ export const lightningPaywallProvider = {
     drawer.classList.toggle('open');
   }
 
+  function copyAgentPrompt() {
+    const text = document.getElementById('agent-prompt').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById('copy-agent-btn');
+      btn.textContent = 'Copied!';
+      btn.style.color = 'var(--green)';
+      btn.style.borderColor = 'var(--green-border)';
+      setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+    });
+  }
+
   function switchTab(id) {
-    ['ts', 'curl'].forEach(t => {
+    ['ts', 'curl', 'alby'].forEach(t => {
       document.getElementById('tab-' + t).classList.toggle('active', t === id);
       document.getElementById('panel-' + t).classList.toggle('active', t === id);
     });
