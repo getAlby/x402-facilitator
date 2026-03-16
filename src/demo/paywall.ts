@@ -8,9 +8,7 @@ interface PaymentRequired {
     asset?: string;
     extra?: {
       invoice?: string;
-      paymentHash?: string;
-      expiresAt?: number;
-      merchantId?: string;
+      paymentMethod?: string;
     };
   }>;
   resource?: { description?: string; url?: string };
@@ -23,9 +21,8 @@ export const lightningPaywallProvider = {
     const pr = paymentRequired as PaymentRequired;
     const req = pr.accepts?.[0];
     const invoice = req?.extra?.invoice ?? "";
-    const paymentHash = req?.extra?.paymentHash ?? "";
-    const expiresAt = req?.extra?.expiresAt ?? 0;
-    const amountSats = Number(req?.amount ?? 0);
+    const amountMsats = Number(req?.amount ?? 0);
+    const amountSats = amountMsats / 1000;
     const requirementsJson = JSON.stringify(req ?? {});
     const qrSvg = invoice
       ? new QRCodeSVG({ content: invoice.toUpperCase(), width: 210, height: 210, padding: 2, color: "#000", background: "#fff", ecl: "L" })
@@ -326,13 +323,13 @@ export const lightningPaywallProvider = {
 <span class="c0">// 2. Pay the invoice with any Lightning wallet (example: Alby NWC)</span>
 <span class="c3">import</span> { nwc } <span class="c3">from</span> <span class="c2">"@getalby/sdk"</span>;
 <span class="c3">const</span> client = <span class="c3">new</span> nwc.<span class="c4">NWCClient</span>({ nostrWalletConnectUrl: <span class="c2">"nostr+walletconnect://..."</span> });
-<span class="c3">const</span> { preimage } = <span class="c3">await</span> client.<span class="c4">payInvoice</span>({ invoice });
+<span class="c3">await</span> client.<span class="c4">payInvoice</span>({ invoice });
 
-<span class="c0">// 3. Retry with proof of payment</span>
+<span class="c0">// 3. Retry with the paid invoice as proof of payment</span>
 <span class="c3">const</span> payload = <span class="c4">btoa</span>(JSON.<span class="c4">stringify</span>({
   <span class="c1">x402Version</span>: <span class="c1">2</span>, <span class="c1">scheme</span>: requirements.scheme,
   <span class="c1">network</span>: requirements.network,
-  <span class="c1">payload</span>: { preimage }, <span class="c1">accepted</span>: requirements,
+  <span class="c1">payload</span>: { invoice }, <span class="c1">accepted</span>: requirements,
 }));
 <span class="c3">const</span> data = <span class="c3">await</span> <span class="c4">fetch</span>(<span class="c2">"https://x402.albylabs.com/demo/quote"</span>, {
   <span class="c1">headers</span>: { <span class="c2">"payment-signature"</span>: payload },
@@ -348,12 +345,12 @@ export const lightningPaywallProvider = {
   | base64 -d | jq -c '.accepts[0]')</span>
 <span class="c3">INVOICE</span>=<span class="c2">$(echo "$REQS" | jq -r '.extra.invoice')</span>
 
-<span class="c0"># 2. Pay $INVOICE with your Lightning wallet → save preimage as $PREIMAGE</span>
+<span class="c0"># 2. Pay $INVOICE with your Lightning wallet</span>
 
-<span class="c0"># 3. Retry with proof of payment</span>
+<span class="c0"># 3. Retry with the paid invoice as proof of payment</span>
 <span class="c3">PAYLOAD</span>=<span class="c2">$(printf \\
-  '{"x402Version":2,"scheme":"exact","network":"lightning:mainnet","payload":{"preimage":"%s"},"accepted":%s}' \\
-  "$PREIMAGE" "$REQS" | base64 -w0)</span>
+  '{"x402Version":2,"scheme":"exact","network":"bip122:000000000019d6689c085ae165831e93","payload":{"invoice":"%s"},"accepted":%s}' \\
+  "$INVOICE" "$REQS" | base64 -w0)</span>
 <span class="c3">curl</span> https://x402.albylabs.com/demo/quote \\
   -H <span class="c2">"payment-signature: $PAYLOAD"</span></pre>
   </div>
@@ -379,8 +376,6 @@ Print the result.</pre>
 
 <script>
   const INVOICE = ${JSON.stringify(invoice)};
-  const PAYMENT_HASH = ${JSON.stringify(paymentHash)};
-  const EXPIRES_AT = ${JSON.stringify(expiresAt)}; // unix seconds
   const RESOURCE_URL = window.location.href;
   const REQUIREMENTS = ${requirementsJson};
   const AMOUNT_SATS = ${amountSats};
@@ -425,20 +420,15 @@ Print the result.</pre>
   }
 
   async function checkPayment() {
-    if (paid || !PAYMENT_HASH) return;
-    if (EXPIRES_AT > 0 && Math.floor(Date.now() / 1000) > EXPIRES_AT) {
-      document.getElementById('status-text').textContent = 'Invoice expired — please refresh to generate a new one.';
-      document.getElementById('spinner').style.display = 'none';
-      return;
-    }
+    if (paid || !INVOICE) return;
     try {
-      const res = await fetch('/invoice/status/' + PAYMENT_HASH);
+      const res = await fetch('/invoice/status?invoice=' + encodeURIComponent(INVOICE));
       if (!res.ok) return;
       const data = await res.json();
-      if (data.paid && data.preimage) {
+      if (data.paid) {
         paid = true;
         clearTimeout(pollTimer);
-        await onPaid(data.preimage);
+        await onPaid();
         return;
       }
     } catch (_) {}
@@ -446,14 +436,14 @@ Print the result.</pre>
     pollTimer = setTimeout(checkPayment, pollInterval);
   }
 
-  async function onPaid(preimage) {
+  async function onPaid() {
     document.getElementById('status-text').textContent = 'Payment confirmed — fetching response…';
 
     const payloadObj = {
       x402Version: 2,
       scheme: REQUIREMENTS.scheme,
       network: REQUIREMENTS.network,
-      payload: { preimage },
+      payload: { invoice: INVOICE },
       accepted: REQUIREMENTS,
     };
     const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payloadObj))));
@@ -496,7 +486,7 @@ Print the result.</pre>
     });
   }
 
-  if (PAYMENT_HASH) {
+  if (INVOICE) {
     pollTimer = setTimeout(checkPayment, POLL_INITIAL);
   }
 </script>

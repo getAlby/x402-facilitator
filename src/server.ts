@@ -1,13 +1,12 @@
 import express, { Request, Response } from "express";
 
-const MSATS_PER_SAT = 1000;
 import { randomUUID } from "crypto";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { redis } from "./redis";
 import { createFacilitator } from "./facilitator";
 import { makeInvoice, lookupInvoice } from "./lightning/nwc-client";
-import { storeInvoice, getInvoice } from "./lightning/invoice-store";
+import { storeInvoice, getInvoice, getInvoiceByInvoiceStr } from "./lightning/invoice-store";
 import { createDemoRouter } from "./demo/routes";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -43,12 +42,13 @@ export async function createApp() {
       version: 2,
       transport: "lightning",
       description:
-        "This server implements the x402 HTTP payment protocol over Bitcoin Lightning Network. " +
-        "Unlike EVM-based x402 where the client submits a signed transaction, Lightning requires " +
-        "a BOLT11 invoice to be generated server-side before the client pays. " +
-        "The invoice and its payment hash are embedded in the 402 response's PAYMENT-REQUIRED header " +
-        "under accepts[0].extra. The client pays the invoice, then proves payment by providing the " +
-        "preimage (sha256 preimage of the payment hash) in the payment-signature header.",
+        "This server implements the x402 HTTP payment protocol over Bitcoin Lightning Network " +
+        "using the 'exact' scheme on CAIP-2 Bitcoin networks. " +
+        "The resource server generates a BOLT11 invoice and embeds it in the 402 response under " +
+        "accepts[0].extra.invoice. The client pays the invoice out-of-band, then proves payment " +
+        "by resending the request with the paid invoice string in payload.invoice of the " +
+        "payment-signature header. No preimage is required — the server verifies payment by " +
+        "querying its Lightning wallet.",
       facilitator: {
         supported: `${base}/supported`,
         verify: `${base}/verify`,
@@ -56,15 +56,14 @@ export async function createApp() {
       },
       lightningExtensions: {
         invoiceStatus: {
-          endpoint: `${base}/invoice/status/:paymentHash`,
+          endpoint: `${base}/invoice/status?invoice=<bolt11>`,
           method: "GET",
           description:
             "Poll this endpoint after instructing the user (or your wallet) to pay the BOLT11 invoice. " +
-            "Returns { paid: false } while unpaid. Returns { paid: true, preimage: '<hex>' } once the " +
-            "Lightning payment settles. Use the preimage as payload.preimage in the payment-signature header.",
+            "Pass the full invoice string as the `invoice` query parameter. " +
+            "Returns { paid: false } while unpaid, { paid: true } once the Lightning payment settles.",
           responseSchema: {
             paid: "boolean",
-            preimage: "string (hex, 64 chars) — only present when paid: true",
           },
         },
       },
@@ -77,25 +76,24 @@ export async function createApp() {
           extract:
             "Decode the header: JSON.parse(atob(response.headers.get('PAYMENT-REQUIRED'))). " +
             "Save the full accepts[0] object as `requirements`. " +
-            "The BOLT11 invoice is at requirements.extra.invoice. " +
-            "The payment hash is at requirements.extra.paymentHash.",
+            "The BOLT11 invoice is at requirements.extra.invoice.",
         },
         {
           step: 2,
           action: "Pay requirements.extra.invoice",
           description:
             "Pay the BOLT11 invoice using any Lightning wallet or NWC client. " +
-            "Example with @getalby/sdk: const { preimage } = await nwcClient.payInvoice({ invoice }). " +
+            "Example with @getalby/sdk: await nwcClient.payInvoice({ invoice }). " +
             "If you cannot pay directly (e.g. browser without wallet access), display the invoice " +
-            "as a QR code and poll /invoice/status/:paymentHash until paid: true.",
+            "as a QR code and poll GET /invoice/status?invoice=<bolt11> until paid: true.",
         },
         {
           step: 3,
           action: "GET <resource-url> with payment-signature header",
-          description: "Retry the request with cryptographic proof of payment.",
+          description: "Retry the request with the paid invoice as proof of payment.",
           headerConstruction:
             "Build a PaymentPayload object: { x402Version: 2, scheme: requirements.scheme, " +
-            "network: requirements.network, payload: { preimage: '<hex preimage from step 2>' }, " +
+            "network: requirements.network, payload: { invoice: '<the bolt11 invoice string>' }, " +
             "accepted: requirements }. " +
             "Base64-encode the JSON: btoa(JSON.stringify(payloadObj)). " +
             "Set as the payment-signature request header.",
@@ -176,7 +174,7 @@ export async function createApp() {
         amount,
         merchantId,
         description = "x402 payment",
-        network = "lightning:mainnet",
+        network = "bip122:000000000019d6689c085ae165831e93",
       } = req.body as {
         amount: unknown;
         merchantId: unknown;
@@ -185,7 +183,7 @@ export async function createApp() {
       };
 
       if (typeof amount !== "number" || !Number.isInteger(amount) || amount <= 0) {
-        res.status(400).json({ error: "amount must be a positive integer (satoshis)" });
+        res.status(400).json({ error: "amount must be a positive integer (millisatoshis)" });
         return;
       }
 
@@ -205,7 +203,7 @@ export async function createApp() {
       await storeInvoice({
         invoice: result.invoice,
         paymentHash: result.paymentHash,
-        amountMsats: amount * MSATS_PER_SAT,
+        amountMsats: amount, // amount is already in millisatoshis
         description,
         expiresAt: result.expiresAt,
         network,
@@ -223,21 +221,22 @@ export async function createApp() {
     }
   });
 
-  // GET /invoice/status/:paymentHash — poll payment status; returns preimage when paid.
+  // GET /invoice/status?invoice=<bolt11> — poll payment status by invoice string.
   // Used by the paywall page after the user scans the QR code on their mobile wallet.
-  app.get("/invoice/status/:paymentHash", async (req: Request, res: Response) => {
-    const stored = await getInvoice(req.params.paymentHash);
+  app.get("/invoice/status", async (req: Request, res: Response) => {
+    const { invoice } = req.query as { invoice?: string };
+    if (!invoice) {
+      res.status(400).json({ error: "invoice query parameter is required" });
+      return;
+    }
+    const stored = await getInvoiceByInvoiceStr(invoice);
     if (!stored) {
       res.status(404).json({ error: "Invoice not found" });
       return;
     }
     try {
-      const result = await lookupInvoice(stored.nwcSecret, req.params.paymentHash);
-      if (result.settledAt && result.preimage) {
-        res.json({ paid: true, preimage: result.preimage });
-      } else {
-        res.json({ paid: false });
-      }
+      const result = await lookupInvoice(stored.nwcSecret, stored.paymentHash);
+      res.json({ paid: !!result.settledAt });
     } catch {
       res.json({ paid: false });
     }
