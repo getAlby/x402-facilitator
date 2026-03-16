@@ -13,7 +13,6 @@ import dotenv from "dotenv";
 import { NWCClient } from "@getalby/sdk";
 
 dotenv.config({ path: ".env" });
-dotenv.config({ path: ".env.sender" });
 
 const FACILITATOR_URL = process.env.FACILITATOR_URL || "http://localhost:3000";
 // After merging the demo into the facilitator, the demo app lives at /demo
