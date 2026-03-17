@@ -12,11 +12,11 @@ import { createDemoRouter } from "./demo/routes";
 const MSATS_PER_SAT = 1000;
 
 // Plausible server-side event tracking for facilitator API calls.
-// Only active when PLAUSIBLE_ID is set; uses it as the Plausible site domain.
+// Only active when PLAUSIBLE_ID is set (the script ID from the Plausible snippet).
+// Domain and URL are derived from the request so no BASE_URL env var is needed.
 function trackEvent(req: Request, eventName: string) {
-  const domain = process.env.PLAUSIBLE_ID;
-  if (!domain) return;
-  const base = process.env.BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+  if (!process.env.PLAUSIBLE_ID) return;
+  const url = `${req.protocol}://${req.get("host")}${req.path}`;
   fetch("https://plausible.io/api/event", {
     method: "POST",
     headers: {
@@ -24,8 +24,8 @@ function trackEvent(req: Request, eventName: string) {
       "User-Agent": req.headers["user-agent"] ?? "x402-facilitator",
       "X-Forwarded-For": (req.headers["x-forwarded-for"] as string) ?? req.socket.remoteAddress ?? "",
     },
-    body: JSON.stringify({ name: eventName, url: `${base}${req.path}`, domain }),
-  }).catch(() => {/* fire and forget */});
+    body: JSON.stringify({ name: eventName, url, domain: req.hostname }),
+  }).catch(() => {});
 }
 
 // Returns the Plausible <script> tags if PLAUSIBLE_ID is set, otherwise empty string.
