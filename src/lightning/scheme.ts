@@ -88,19 +88,13 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
       };
     }
 
-    // Check amount — requirements.amount is in millisatoshis
-    const rawAmount =
-      typeof requirements.amount === "object" &&
-      requirements.amount !== null &&
-      "amount" in requirements.amount
-        ? (requirements.amount as { amount: string | number }).amount
-        : requirements.amount;
-    const requiredMsats = BigInt(rawAmount as string | number);
-    if (BigInt(stored.amountMsats) < requiredMsats) {
+    // Check amount — requirements.amount is in millisatoshis; spec requires exact match
+    const requiredMsats = BigInt(requirements.amount);
+    if (BigInt(stored.amountMsats) !== requiredMsats) {
       return {
         isValid: false,
-        invalidReason: "amount_too_low",
-        invalidMessage: `Invoice amount ${stored.amountMsats} msats is less than required ${requiredMsats} msats`,
+        invalidReason: "amount_mismatch",
+        invalidMessage: `Invoice amount ${stored.amountMsats} msats does not match required ${requiredMsats} msats`,
       };
     }
 
