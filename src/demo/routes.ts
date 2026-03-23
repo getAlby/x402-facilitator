@@ -4,8 +4,7 @@ import { x402Facilitator } from "@x402/core/facilitator";
 import { LightningSchemeNetworkServer } from "./lightning-server";
 import { requestContext } from "./request-context";
 import { lightningPaywallProvider } from "./paywall";
-
-const BITCOIN_MAINNET = "bip122:000000000019d6689c085ae165831e93";
+import { BITCOIN_MAINNET } from "../constants";
 
 export function createDemoRouter(facilitatorUrl: string, merchantId: string, facilitator: x402Facilitator) {
   const resourceServer = new x402ResourceServer(facilitator as never)

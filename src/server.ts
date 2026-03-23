@@ -8,6 +8,7 @@ import { createFacilitator } from "./facilitator";
 import { makeInvoice, lookupInvoice } from "./lightning/nwc-client";
 import { storeInvoice, getInvoice, getInvoiceByInvoiceStr } from "./lightning/invoice-store";
 import { createDemoRouter } from "./demo/routes";
+import { BITCOIN_MAINNET } from "./constants";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -174,7 +175,7 @@ export async function createApp() {
         amount,
         merchantId,
         description = "x402 payment",
-        network = "bip122:000000000019d6689c085ae165831e93",
+        network = BITCOIN_MAINNET,
       } = req.body as {
         amount: unknown;
         merchantId: unknown;
@@ -182,8 +183,8 @@ export async function createApp() {
         network?: string;
       };
 
-      if (typeof amount !== "number" || !Number.isInteger(amount) || amount <= 0) {
-        res.status(400).json({ error: "amount must be a positive integer (millisatoshis)" });
+      if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+        res.status(400).json({ error: "amount must be a positive safe integer (millisatoshis)" });
         return;
       }
 
@@ -224,17 +225,17 @@ export async function createApp() {
   // GET /invoice/status?invoice=<bolt11> — poll payment status by invoice string.
   // Used by the paywall page after the user scans the QR code on their mobile wallet.
   app.get("/invoice/status", async (req: Request, res: Response) => {
-    const { invoice } = req.query as { invoice?: string };
-    if (!invoice) {
+    const invoiceParam = req.query.invoice;
+    if (typeof invoiceParam !== "string" || !invoiceParam) {
       res.status(400).json({ error: "invoice query parameter is required" });
       return;
     }
-    const stored = await getInvoiceByInvoiceStr(invoice);
-    if (!stored) {
-      res.status(404).json({ error: "Invoice not found" });
-      return;
-    }
     try {
+      const stored = await getInvoiceByInvoiceStr(invoiceParam);
+      if (!stored) {
+        res.status(404).json({ error: "Invoice not found" });
+        return;
+      }
       const result = await lookupInvoice(stored.nwcSecret, stored.paymentHash);
       res.json({ paid: !!result.settledAt });
     } catch {
@@ -244,16 +245,21 @@ export async function createApp() {
 
   // GET /invoice/:paymentHash — look up a stored invoice (used by demo to reuse invoices)
   app.get("/invoice/:paymentHash", async (req: Request, res: Response) => {
-    const stored = await getInvoice(req.params.paymentHash);
-    if (!stored) {
-      res.status(404).json({ error: "Invoice not found or expired" });
-      return;
+    try {
+      const stored = await getInvoice(req.params.paymentHash);
+      if (!stored) {
+        res.status(404).json({ error: "Invoice not found or expired" });
+        return;
+      }
+      res.json({
+        invoice: stored.invoice,
+        paymentHash: stored.paymentHash,
+        expiresAt: stored.expiresAt,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Lookup failed";
+      res.status(500).json({ error: message });
     }
-    res.json({
-      invoice: stored.invoice,
-      paymentHash: stored.paymentHash,
-      expiresAt: stored.expiresAt,
-    });
   });
 
   // Mount demo routes if DEMO_NWC_SECRET is configured.

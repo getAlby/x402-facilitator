@@ -25,11 +25,10 @@ export class LightningSchemeNetworkServer implements SchemeNetworkServer {
   constructor(private readonly facilitatorUrl: string) {}
 
   async parsePrice(price: Price, _network: Network): Promise<AssetAmount> {
-    // Accept AssetAmount directly — convert to msats if in sats
+    // Accept AssetAmount with asset "BTC" — amount must already be in millisatoshis per spec
     if (typeof price === "object" && "amount" in price && "asset" in price) {
-      const asset = String(price.asset).toLowerCase();
-      if (asset === "sat" || asset === "sats") {
-        return { amount: String(Number(price.amount) * 1000), asset: "BTC" };
+      if (String(price.asset).toUpperCase() !== "BTC") {
+        throw new Error(`Unsupported asset "${price.asset}" — only "BTC" (amount in millisatoshis) is supported`);
       }
       return { amount: String(price.amount), asset: "BTC" };
     }

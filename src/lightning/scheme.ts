@@ -89,7 +89,15 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
     }
 
     // Check amount — requirements.amount is in millisatoshis; spec requires exact match
-    const requiredMsats = BigInt(requirements.amount);
+    const amountStr = String(requirements.amount ?? "").trim();
+    if (!/^\d+$/.test(amountStr)) {
+      return {
+        isValid: false,
+        invalidReason: "invalid_amount",
+        invalidMessage: `Invalid amount in requirements: ${requirements.amount}`,
+      };
+    }
+    const requiredMsats = BigInt(amountStr);
     if (BigInt(stored.amountMsats) !== requiredMsats) {
       return {
         isValid: false,
@@ -116,7 +124,28 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
     requirements: PaymentRequirements,
     _context?: FacilitatorContext,
   ): Promise<SettleResponse> {
-    const { invoice: payloadInvoice } = payload.payload as { invoice: string };
+    const rawPayload = payload.payload as Record<string, unknown>;
+    const payloadInvoice = typeof rawPayload?.invoice === "string" ? rawPayload.invoice : "";
+    if (!payloadInvoice) {
+      return {
+        success: false,
+        errorReason: "missing_invoice",
+        errorMessage: "Payment payload must include the paid invoice",
+        transaction: "",
+        network: requirements.network,
+      };
+    }
+
+    const extra = requirements.extra as { invoice?: string };
+    if (extra.invoice && payloadInvoice !== extra.invoice) {
+      return {
+        success: false,
+        errorReason: "invoice_mismatch",
+        errorMessage: "Invoice in payload does not match invoice in requirements",
+        transaction: "",
+        network: requirements.network,
+      };
+    }
 
     const stored = await getInvoiceByInvoiceStr(payloadInvoice);
     if (!stored) {

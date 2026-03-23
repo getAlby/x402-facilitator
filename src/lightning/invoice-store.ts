@@ -17,8 +17,8 @@ export async function storeInvoice(inv: StoredInvoice): Promise<void> {
   if (ttl <= 0) return; // already expired before we even store it
   const pipeline = redis.pipeline();
   pipeline.set(`invoice:${inv.paymentHash}`, JSON.stringify(inv), "EX", ttl);
-  // Secondary index: invoice string → paymentHash (for lookup by BOLT11 string)
-  pipeline.set(`invoice_str:${inv.invoice}`, inv.paymentHash, "EX", ttl);
+  // Secondary index: normalized (lowercase) invoice string → paymentHash
+  pipeline.set(`invoice_str:${inv.invoice.toLowerCase()}`, inv.paymentHash, "EX", ttl);
   await pipeline.exec();
 }
 
@@ -28,7 +28,7 @@ export async function getInvoice(paymentHash: string): Promise<StoredInvoice | n
 }
 
 export async function getInvoiceByInvoiceStr(invoiceStr: string): Promise<StoredInvoice | null> {
-  const paymentHash = await redis.get(`invoice_str:${invoiceStr}`);
+  const paymentHash = await redis.get(`invoice_str:${invoiceStr.toLowerCase()}`);
   if (!paymentHash) return null;
   return getInvoice(paymentHash);
 }
@@ -38,7 +38,7 @@ export async function deleteInvoice(paymentHash: string): Promise<void> {
   const stored = await getInvoice(paymentHash);
   const pipeline = redis.pipeline();
   pipeline.del(`invoice:${paymentHash}`);
-  if (stored) pipeline.del(`invoice_str:${stored.invoice}`);
+  if (stored) pipeline.del(`invoice_str:${stored.invoice.toLowerCase()}`);
   await pipeline.exec();
 }
 
