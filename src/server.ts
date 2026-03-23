@@ -1,13 +1,46 @@
 import express, { Request, Response } from "express";
-
 import { randomUUID } from "crypto";
 import { join, dirname } from "path";
+import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { redis } from "./redis";
 import { createFacilitator } from "./facilitator";
 import { makeInvoice, lookupInvoice } from "./lightning/nwc-client";
 import { storeInvoice, getInvoice, getInvoiceByInvoiceStr } from "./lightning/invoice-store";
 import { createDemoRouter } from "./demo/routes";
+
+const MSATS_PER_SAT = 1000;
+
+// Plausible server-side event tracking for facilitator API calls.
+// Only active when PLAUSIBLE_ID is set (the script ID from the Plausible snippet).
+// Domain and URL are derived from the request so BASE_URL is not needed here.
+function trackEvent(req: Request, eventName: string) {
+  if (!process.env.PLAUSIBLE_ID) return;
+  const url = `${req.protocol}://${req.get("host")}${req.path}`;
+  fetch("https://plausible.io/api/event", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "User-Agent": req.headers["user-agent"] ?? "x402-facilitator",
+      "X-Forwarded-For": (req.headers["x-forwarded-for"] as string) ?? req.socket.remoteAddress ?? "",
+    },
+    body: JSON.stringify({ name: eventName, url, domain: req.hostname }),
+  }).catch(() => {});
+}
+
+// Returns the Plausible <script> tags if PLAUSIBLE_ID is set, otherwise empty string.
+// PLAUSIBLE_ID is the unique script ID from the tracking snippet, e.g. "pa-hlfQoAHvmRYP5Iz9zBD3Y".
+function plausibleSnippet(): string {
+  const id = process.env.PLAUSIBLE_ID;
+  if (!id) return "";
+  return [
+    `  <script async src="https://plausible.io/js/${id}.js"></script>`,
+    `  <script>`,
+    `    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};`,
+    `    plausible.init()`,
+    `  </script>`,
+  ].join("\n");
+}
 import { BITCOIN_MAINNET } from "./constants";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -20,7 +53,11 @@ export async function createApp() {
 
   // GET / — landing page
   app.get("/", (_req: Request, res: Response) => {
-    res.sendFile(join(__dirname, "landing.html"));
+    const html = readFileSync(join(__dirname, "landing.html"), "utf8").replace(
+      "</head>",
+      `${plausibleSnippet()}\n</head>`
+    );
+    res.type("html").send(html);
   });
 
   // GET /alby-logo.svg — static asset
@@ -36,7 +73,8 @@ export async function createApp() {
   // GET /.well-known/x402 — machine-readable protocol description for agents and LLMs.
   // Explains the Lightning-specific payment flow including the invoice pre-generation
   // step and the polling endpoint that bridges mobile QR payments to the x402 protocol.
-  app.get("/.well-known/x402", (_req: Request, res: Response) => {
+  app.get("/.well-known/x402", (req: Request, res: Response) => {
+    trackEvent(req, "well-known");
     const base = process.env.BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
     res.json({
       protocol: "x402",
@@ -111,7 +149,8 @@ export async function createApp() {
   });
 
   // GET /supported — capability discovery
-  app.get("/supported", (_req: Request, res: Response) => {
+  app.get("/supported", (req: Request, res: Response) => {
+    trackEvent(req, "supported");
     res.json(facilitator.getSupported());
   });
 
@@ -119,6 +158,7 @@ export async function createApp() {
   // stable merchantId (UUID). The secret is stored server-side in Redis; clients only
   // ever see the opaque UUID.
   app.post("/register", async (req: Request, res: Response) => {
+    trackEvent(req, "register");
     const { nwcSecret } = req.body as { nwcSecret: unknown };
 
     if (typeof nwcSecret !== "string" || !nwcSecret.startsWith("nostr+walletconnect://")) {
@@ -135,6 +175,7 @@ export async function createApp() {
 
   // POST /verify — standard x402 verify endpoint
   app.post("/verify", async (req: Request, res: Response) => {
+    trackEvent(req, "verify");
     try {
       const { paymentPayload, paymentRequirements } = req.body;
       const result = await facilitator.verify(paymentPayload, paymentRequirements);
@@ -151,6 +192,7 @@ export async function createApp() {
 
   // POST /settle — standard x402 settle endpoint
   app.post("/settle", async (req: Request, res: Response) => {
+    trackEvent(req, "settle");
     try {
       const { paymentPayload, paymentRequirements } = req.body;
       const result = await facilitator.settle(paymentPayload, paymentRequirements);
@@ -170,6 +212,7 @@ export async function createApp() {
   // POST /invoice — Lightning-specific: generate a fresh BOLT11 invoice for a merchant.
   // Accepts a merchantId; looks up the NWC connection secret from Redis server-side.
   app.post("/invoice", async (req: Request, res: Response) => {
+    trackEvent(req, "invoice");
     try {
       const {
         amount,
@@ -269,8 +312,7 @@ export async function createApp() {
   if (DEMO_NWC_SECRET) {
     const demoMerchantId = randomUUID();
     await redis.set(`merchant:${demoMerchantId}`, DEMO_NWC_SECRET);
-    const port = process.env.PORT || "3000";
-    app.use("/demo", createDemoRouter(`http://localhost:${port}`, demoMerchantId, facilitator));
+    app.use("/demo", createDemoRouter(process.env.BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`, demoMerchantId, facilitator));
   }
 
   return app;

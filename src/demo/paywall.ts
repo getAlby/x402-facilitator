@@ -248,6 +248,11 @@ export const lightningPaywallProvider = {
       text-align: center; margin-top: 0.5rem;
     }
   </style>
+${process.env.PLAUSIBLE_ID ? `  <script async src="https://plausible.io/js/${process.env.PLAUSIBLE_ID}.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>` : ""}
 </head>
 <body>
 
