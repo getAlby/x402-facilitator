@@ -107,7 +107,17 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
     }
 
     // Query Lightning node to verify payment was received
-    const result = await lookupInvoice(stored.nwcSecret, stored.paymentHash);
+    let result: Awaited<ReturnType<typeof lookupInvoice>>;
+    try {
+      result = await lookupInvoice(stored.nwcSecret, stored.paymentHash);
+    } catch (err) {
+      console.error("NWC lookupInvoice failed during verify:", err);
+      return {
+        isValid: false,
+        invalidReason: "nwc_lookup_failed",
+        invalidMessage: err instanceof Error ? err.message : "NWC lookup failed",
+      };
+    }
     if (!result.settledAt) {
       return {
         isValid: false,
