@@ -2,8 +2,8 @@
  * End-to-end test for the x402 Lightning facilitator (with embedded demo)
  *
  * Requires:
- *   - .env              — UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN, DEMO_NWC_SECRET
- *   - .env.sender       — SENDER_NWC_SECRET (wallet that pays the invoice)
+ *   - .env              — REDIS_URL, DEMO_NWC_SECRET, SENDER_NWC_SECRET
+ *                         (copy .env.example → .env and fill in your values)
  *   - Facilitator running on http://localhost:3000  (npm run dev)
  *
  * Run: npm run test:e2e
@@ -21,7 +21,7 @@ const SENDER_NWC_SECRET = process.env.SENDER_NWC_SECRET;
 
 if (!SENDER_NWC_SECRET) {
   console.error("✗ SENDER_NWC_SECRET is not set.");
-  console.error("  Copy .env.sender.example → .env.sender and fill in your sender wallet.");
+  console.error("  Copy .env.example → .env and fill in SENDER_NWC_SECRET.");
   process.exit(1);
 }
 
@@ -161,8 +161,7 @@ async function main() {
 
   const paymentSignatureHeader = b64encode({
     x402Version: 2,
-    scheme: accepted.scheme,
-    network: accepted.network,
+    resource: paymentRequired.resource,
     payload: { invoice },
     accepted,
   });
