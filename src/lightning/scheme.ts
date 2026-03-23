@@ -22,6 +22,24 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
     requirements: PaymentRequirements,
     _context?: FacilitatorContext,
   ): Promise<VerifyResponse> {
+    // Step 2: verify x402Version is 2
+    if (payload.x402Version !== 2) {
+      return {
+        isValid: false,
+        invalidReason: "invalid_version",
+        invalidMessage: `Unsupported x402Version: ${payload.x402Version}. Only version 2 is supported.`,
+      };
+    }
+
+    // Step 3: verify network matches
+    if (payload.accepted.network !== requirements.network) {
+      return {
+        isValid: false,
+        invalidReason: "network_mismatch",
+        invalidMessage: `Network in payload (${payload.accepted.network}) does not match requirements (${requirements.network})`,
+      };
+    }
+
     const { invoice: payloadInvoice } = payload.payload as { invoice?: string };
     const extra = requirements.extra as { invoice?: string; paymentMethod?: string };
 
@@ -41,7 +59,7 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
       };
     }
 
-    // Prevent invoice substitution attacks
+    // Step 4: prevent invoice substitution attacks
     if (payloadInvoice !== extra.invoice) {
       return {
         isValid: false,
@@ -145,9 +163,13 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
 
       return {
         success: true,
-        transaction: payloadInvoice, // BOLT11 invoice string serves as the transaction identifier
+        transaction: stored.paymentHash, // SHA-256 payment hash (hex-encoded) per spec
         network: requirements.network,
         payer: "anonymous",
+        extensions: {
+          invoice: payloadInvoice,
+          settledAt: result.settledAt,
+        },
       };
     } finally {
       await releaseSettleLock(stored.paymentHash);
