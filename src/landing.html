@@ -410,7 +410,7 @@
         &nbsp;&nbsp;{<br/>
         &nbsp;&nbsp;&nbsp;&nbsp;<span class="c2">"GET /resource"</span>: {<br/>
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c1">scheme</span>: <span class="c2">"exact"</span>, <span class="c1">network</span>: <span class="c2">"bip122:000000000019d6689c085ae165831e93"</span>,<br/>
-        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c1">price</span>: { <span class="c1">amount</span>: <span class="c2">"21000"</span>, <span class="c1">asset</span>: <span class="c2">"BTC"</span> },<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c1">price</span>: { <span class="c1">amount</span>: <span class="c2">"21000"</span>, <span class="c1">asset</span>: <span class="c2">"BTC"</span> }, <span class="c0">// amount in msats (21000 msats = 21 sats)</span><br/>
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c1">extra</span>: { <span class="c1">merchantId</span>: <span class="c2">"3f2a…"</span> }<br/>
         &nbsp;&nbsp;&nbsp;&nbsp;}<br/>
         &nbsp;&nbsp;},<br/>
@@ -643,7 +643,7 @@
 
       <div class="faq-item">
         <div class="faq-q">Why are there no public payment stats or transaction counts?</div>
-        <div class="faq-a">Lightning payments are private by design. Unlike on-chain Bitcoin or Ethereum, Lightning transactions don't appear on a public ledger — they route through the network without a permanent record. The only proof of payment is the payment hash, known only to the parties involved. There is nothing to aggregate or display. That's a feature, not a limitation.</div>
+        <div class="faq-a">Lightning payments are private by design. Unlike on-chain Bitcoin or Ethereum, Lightning transactions don't appear on a public ledger — they route through the network without a permanent record. The payment hash is an identifier embedded in the invoice before settlement — not itself proof that payment occurred. Proof of settlement comes from a wallet or invoice lookup tied to that hash, confirming the invoice was paid. There is nothing to aggregate or display. That's a feature, not a limitation.</div>
       </div>
 
       <div class="faq-item">
