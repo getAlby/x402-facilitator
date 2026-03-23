@@ -80,11 +80,7 @@ export class LightningSchemeNetworkServer implements SchemeNetworkServer {
 
     // No existing invoice — generate a fresh BOLT11 invoice via the facilitator.
     // requirements.amount is in millisatoshis (as set by parsePrice).
-    const rawAmount = requirements.amount as unknown;
-    const amountMsats =
-      typeof rawAmount === "object" && rawAmount !== null && "amount" in rawAmount
-        ? Number((rawAmount as { amount: unknown }).amount)
-        : Number(rawAmount);
+    const amountMsats = Number(requirements.amount);
 
     const response = await fetch(`${this.facilitatorUrl}/invoice`, {
       method: "POST",
