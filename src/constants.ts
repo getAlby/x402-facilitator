@@ -1,0 +1,1 @@
+export const BITCOIN_MAINNET = "bip122:000000000019d6689c085ae165831e93" as const;

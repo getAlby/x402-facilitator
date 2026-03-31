@@ -9,10 +9,10 @@ A multi-tenant [x402](https://x402.org) facilitator for Lightning Network paymen
 │  Facilitator endpoints                                   │
 │    POST /register    register a merchant NWC secret      │
 │    POST /invoice     generate BOLT11 for a merchant      │
-│    POST /verify      check preimage cryptographically    │
-│    POST /settle      confirm payment via merchant NWC    │
+│    POST /verify      confirm invoice paid via NWC        │
+│    POST /settle      confirm invoice settled via NWC     │
 │    GET  /supported   capability discovery                │
-│    GET  /invoice/status/:hash  poll payment status       │
+│    GET  /invoice/status?invoice=<bolt11>  poll status    │
 ├─────────────────────────────────────────────────────────┤
 │  Demo (enabled when DEMO_NWC_SECRET is set)             │
 │    GET /demo/quote   pay ~$0.01 → get a Satoshi quote   │
@@ -33,10 +33,10 @@ Multiple merchants can share one facilitator instance, each with their own indep
 Unlike EVM-based x402 where the client signs a transaction, Lightning requires a BOLT11 invoice to be generated server-side before the client pays:
 
 1. Client `GET /resource` → server returns `402` with invoice in `extra.invoice`
-2. Client pays the BOLT11 invoice → receives a `preimage`
-3. Client retries with `preimage` in the `payment-signature` header
-4. Server calls `/verify` (checks `sha256(preimage) == paymentHash`, no network call)
-5. Server calls `/settle` (calls NWC `lookup_invoice` to confirm `settled_at`)
+2. Client pays the BOLT11 invoice out-of-band (Lightning wallet)
+3. Client retries with the paid invoice string in the `payment-signature` header (`payload.invoice`)
+4. Server calls `/verify` (checks invoice is in Redis, amount matches, NWC confirms `settled_at`)
+5. Server calls `/settle` (NWC `lookup_invoice` confirms `settled_at`, deletes invoice from Redis)
 
 ## Setup
 
@@ -95,14 +95,6 @@ Use the `merchantId` in your resource server's `extra.merchantId` field.
 
 ## Open questions / TODOs
 
-### 1. `verify` vs `settle` — the hold invoice problem
-
-**Current behaviour:** `verify` checks the preimage cryptographically (no network call). `settle` calls the merchant's NWC wallet to confirm the invoice is paid.
-
-**The problem:** In Lightning, payment is atomic — once the preimage is revealed, the payment is already settled. There is no separate "settle" step at the protocol level.
-
-**Hold invoices as a solution:** [HODL invoices](https://bitcoinops.org/en/topics/hold-invoices/) would let the facilitator hold funds in-flight during `verify` and release them at `settle`. Requires NWC wallet support (not universally available yet).
-
-### 2. NWC client connection lifecycle
+### 1. NWC client connection lifecycle
 
 NWC clients are cached indefinitely by connection string. There is no reconnection logic or health-check. Long-lived connections may silently drop. Consider adding a ping/reconnect strategy.

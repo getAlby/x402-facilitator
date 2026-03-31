@@ -2,8 +2,8 @@
  * End-to-end test for the x402 Lightning facilitator (with embedded demo)
  *
  * Requires:
- *   - .env              — UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN, DEMO_NWC_SECRET
- *   - .env.sender       — SENDER_NWC_SECRET (wallet that pays the invoice)
+ *   - .env              — REDIS_URL, DEMO_NWC_SECRET, SENDER_NWC_SECRET
+ *                         (copy .env.example → .env and fill in your values)
  *   - Facilitator running on http://localhost:3000  (npm run dev)
  *
  * Run: npm run test:e2e
@@ -11,10 +11,8 @@
 
 import dotenv from "dotenv";
 import { NWCClient } from "@getalby/sdk";
-import { createHash } from "crypto";
 
 dotenv.config({ path: ".env" });
-dotenv.config({ path: ".env.sender" });
 
 const FACILITATOR_URL = process.env.FACILITATOR_URL || "http://localhost:3000";
 // After merging the demo into the facilitator, the demo app lives at /demo
@@ -23,7 +21,7 @@ const SENDER_NWC_SECRET = process.env.SENDER_NWC_SECRET;
 
 if (!SENDER_NWC_SECRET) {
   console.error("✗ SENDER_NWC_SECRET is not set.");
-  console.error("  Copy .env.sender.example → .env.sender and fill in your sender wallet.");
+  console.error("  Copy .env.example → .env and fill in SENDER_NWC_SECRET.");
   process.exit(1);
 }
 
@@ -81,19 +79,20 @@ async function main() {
   const accepted = paymentRequired.accepts[0];
   ok("scheme", accepted.scheme);
   ok("network", accepted.network);
-  ok("amount", `${accepted.amount} ${accepted.asset}`);
+  ok("amount (msats)", `${accepted.amount} ${accepted.asset}`);
+  ok("paymentMethod", accepted.extra.paymentMethod);
 
-  const { invoice, paymentHash } = accepted.extra as { invoice: string; paymentHash: string };
+  const { invoice } = accepted.extra as { invoice: string };
   if (!invoice?.startsWith("lnbc")) fail("invoice", "expected BOLT11 starting with lnbc");
   ok("invoice", invoice.slice(0, 50) + "...");
-  ok("paymentHash", paymentHash);
 
   // ─────────────────────────────────────────────
-  // 3. /verify — wrong preimage (expect rejection)
+  // 3. /verify — wrong invoice (expect rejection)
   // ─────────────────────────────────────────────
-  section("3. Facilitator /verify — wrong preimage (expect rejection)");
+  section("3. Facilitator /verify — mismatched invoice (expect rejection)");
 
-  const badPreimage = "deadbeef".repeat(8);
+  // Tamper the invoice to trigger invoice_mismatch
+  const wrongInvoice = invoice.slice(0, -4) + "0000";
   const verifyBadRes = await fetch(`${FACILITATOR_URL}/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -102,13 +101,13 @@ async function main() {
         x402Version: 2,
         resource: paymentRequired.resource,
         accepted,
-        payload: { preimage: badPreimage },
+        payload: { invoice: wrongInvoice },
       },
       paymentRequirements: accepted,
     }),
   });
   const verifyBad = (await verifyBadRes.json()) as any;
-  if (verifyBad.isValid) fail("verify bad preimage", "should be invalid");
+  if (verifyBad.isValid) fail("verify wrong invoice", "should be invalid");
   ok("isValid", verifyBad.isValid);
   ok("invalidReason", verifyBad.invalidReason);
 
@@ -120,12 +119,10 @@ async function main() {
   console.log(`  Invoice: ${invoice.slice(0, 60)}...`);
 
   const senderClient = new NWCClient({ nostrWalletConnectUrl: SENDER_NWC_SECRET! });
-  let preimage!: string;
 
   try {
-    const payResult = await senderClient.payInvoice({ invoice });
-    preimage = payResult.preimage;
-    ok("preimage", preimage.slice(0, 16) + "...");
+    await senderClient.payInvoice({ invoice });
+    ok("payment", "sent");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     fail("payInvoice", msg);
@@ -133,22 +130,10 @@ async function main() {
     senderClient.close();
   }
 
-  // Sanity-check: sha256(preimage) must equal paymentHash
-  const computedHash = createHash("sha256")
-    .update(Buffer.from(preimage, "hex"))
-    .digest("hex");
-  if (computedHash !== paymentHash) {
-    fail(
-      "preimage hash check",
-      `sha256(preimage)=${computedHash} ≠ paymentHash=${paymentHash}`,
-    );
-  }
-  ok("sha256(preimage) == paymentHash", true);
-
   // ─────────────────────────────────────────────
-  // 5. /verify — real preimage (expect success)
+  // 5. /verify — correct invoice after payment (expect success)
   // ─────────────────────────────────────────────
-  section("5. Facilitator /verify — real preimage (expect success)");
+  section("5. Facilitator /verify — correct invoice after payment (expect success)");
 
   const verifyRes = await fetch(`${FACILITATOR_URL}/verify`, {
     method: "POST",
@@ -158,14 +143,14 @@ async function main() {
         x402Version: 2,
         resource: paymentRequired.resource,
         accepted,
-        payload: { preimage },
+        payload: { invoice },
       },
       paymentRequirements: accepted,
     }),
   });
   const verifyResult = (await verifyRes.json()) as any;
   if (!verifyResult.isValid) {
-    fail("verify real preimage", `${verifyResult.invalidReason}: ${verifyResult.invalidMessage}`);
+    fail("verify real invoice", `${verifyResult.invalidReason}: ${verifyResult.invalidMessage}`);
   }
   ok("isValid", verifyResult.isValid);
 
@@ -176,9 +161,8 @@ async function main() {
 
   const paymentSignatureHeader = b64encode({
     x402Version: 2,
-    scheme: accepted.scheme,
-    network: accepted.network,
-    payload: { preimage },
+    resource: paymentRequired.resource,
+    payload: { invoice },
     accepted,
   });
 

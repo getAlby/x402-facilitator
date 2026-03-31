@@ -409,8 +409,8 @@
         <span class="c3">app</span>.<span class="c1">use</span>(<span class="c1">paymentMiddleware</span>(<br/>
         &nbsp;&nbsp;{<br/>
         &nbsp;&nbsp;&nbsp;&nbsp;<span class="c2">"GET /resource"</span>: {<br/>
-        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c1">scheme</span>: <span class="c2">"exact"</span>, <span class="c1">network</span>: <span class="c2">"lightning:mainnet"</span>,<br/>
-        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c1">price</span>: { <span class="c1">amount</span>: <span class="c2">"21"</span>, <span class="c1">asset</span>: <span class="c2">"sat"</span> },<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c1">scheme</span>: <span class="c2">"exact"</span>, <span class="c1">network</span>: <span class="c2">"bip122:000000000019d6689c085ae165831e93"</span>,<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c1">price</span>: { <span class="c1">amount</span>: <span class="c2">"21000"</span>, <span class="c1">asset</span>: <span class="c2">"BTC"</span> }, <span class="c0">// amount in msats (21000 msats = 21 sats)</span><br/>
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c1">extra</span>: { <span class="c1">merchantId</span>: <span class="c2">"3f2a…"</span> }<br/>
         &nbsp;&nbsp;&nbsp;&nbsp;}<br/>
         &nbsp;&nbsp;},<br/>
@@ -523,14 +523,14 @@
             <div class="flow-col"><div class="flow-n">02</div><div class="flow-ln"></div></div>
             <div class="flow-body">
               <h3>Pay with Bitcoin</h3>
-              <p>Use any compatible Bitcoin wallet. You receive a <span class="pill">preimage</span> — cryptographic proof that the payment settled.</p>
+              <p>Use any compatible Lightning wallet to pay the BOLT11 invoice from the <span class="pill">extra.invoice</span> field.</p>
             </div>
           </div>
           <div class="flow-step">
             <div class="flow-col"><div class="flow-n">03</div></div>
             <div class="flow-body">
               <h3>Retry with payment proof</h3>
-              <p>Send the preimage in the <span class="pill">payment-signature</span> header. The server verifies instantly and delivers the resource.</p>
+              <p>Send the paid invoice string in the <span class="pill">payment-signature</span> header. The server verifies payment via your wallet and delivers the resource.</p>
             </div>
           </div>
         </div>
@@ -582,7 +582,7 @@
       <div class="feat">
         <span class="feat-n">04</span>
         <h3>Private by design</h3>
-        <p>Lightning payments leave no on-chain trace. No wallet address, no transaction hash, no public ledger entry — just a cryptographic preimage known only to the parties involved.</p>
+        <p>Lightning payments leave no on-chain trace. No wallet address, no public ledger entry — just a payment hash known only to the parties involved.</p>
       </div>
       <div class="feat">
         <span class="feat-n">05</span>
@@ -643,7 +643,7 @@
 
       <div class="faq-item">
         <div class="faq-q">Why are there no public payment stats or transaction counts?</div>
-        <div class="faq-a">Lightning payments are private by design. Unlike on-chain Bitcoin or Ethereum, Lightning transactions don't appear on a public ledger — they route through the network without a permanent record. The only proof of payment is the preimage, known only to the parties involved. There is nothing to aggregate or display. That's a feature, not a limitation.</div>
+        <div class="faq-a">Lightning payments are private by design. Unlike on-chain Bitcoin or Ethereum, Lightning transactions don't appear on a public ledger — they route through the network without a permanent record. The payment hash is an identifier embedded in the invoice before settlement — not itself proof that payment occurred. Proof of settlement comes from a wallet or invoice lookup tied to that hash, confirming the invoice was paid. There is nothing to aggregate or display. That's a feature, not a limitation.</div>
       </div>
 
       <div class="faq-item">
@@ -663,7 +663,7 @@
 
       <div class="faq-item">
         <div class="faq-q">How is this different from Stripe or a traditional payment API?</div>
-        <div class="faq-a">Stripe requires buyers to have an account, a card, and a billing address — and takes a percentage of every transaction. Here, buyers need only a Lightning wallet. There's no sign-up, no redirect, no KYC, no chargeback risk. Payments happen inside the HTTP request itself, and settlement is final the moment the preimage is verified.</div>
+        <div class="faq-a">Stripe requires buyers to have an account, a card, and a billing address — and takes a percentage of every transaction. Here, buyers need only a Lightning wallet. There's no sign-up, no redirect, no KYC, no chargeback risk. Payments happen inside the HTTP request itself, and settlement is confirmed instantly via the Lightning network.</div>
       </div>
 
       <div class="faq-item">

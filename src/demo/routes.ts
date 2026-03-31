@@ -4,18 +4,19 @@ import { x402Facilitator } from "@x402/core/facilitator";
 import { LightningSchemeNetworkServer } from "./lightning-server";
 import { requestContext } from "./request-context";
 import { lightningPaywallProvider } from "./paywall";
+import { BITCOIN_MAINNET } from "../constants";
 
 export function createDemoRouter(facilitatorUrl: string, merchantId: string, facilitator: x402Facilitator) {
   const resourceServer = new x402ResourceServer(facilitator as never)
-    .register("lightning:mainnet", new LightningSchemeNetworkServer(facilitatorUrl));
+    .register(BITCOIN_MAINNET, new LightningSchemeNetworkServer(facilitatorUrl));
 
   const routes = {
     "GET /quote": {
       accepts: {
         scheme: "exact",
         price: "$0.01",
-        network: "lightning:mainnet" as const,
-        payTo: "",
+        network: BITCOIN_MAINNET as `${string}:${string}`,
+        payTo: "anonymous",
         maxTimeoutSeconds: 300,
         extra: { merchantId },
       },
@@ -26,15 +27,15 @@ export function createDemoRouter(facilitatorUrl: string, merchantId: string, fac
 
   const router = express.Router();
 
-  // Extract paymentHash from payment-signature header for invoice reuse
+  // Extract invoice from payment-signature header for invoice reuse
   router.use((req: Request, _res: Response, next: NextFunction) => {
     const xPayment = req.headers["payment-signature"] as string | undefined;
     if (xPayment) {
       try {
         const payload = JSON.parse(Buffer.from(xPayment, "base64").toString("utf8"));
-        const paymentHash = payload?.accepted?.extra?.paymentHash as string | undefined;
-        if (paymentHash) {
-          requestContext.run({ paymentHash }, next);
+        const invoice = (payload?.payload?.invoice ?? payload?.accepted?.extra?.invoice) as string | undefined;
+        if (invoice) {
+          requestContext.run({ existingInvoice: invoice }, next);
           return;
         }
       } catch {

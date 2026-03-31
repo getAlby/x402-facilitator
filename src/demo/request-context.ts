@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "async_hooks";
 
 interface RequestContext {
-  paymentHash?: string;
+  existingInvoice?: string;
 }
 
 export const requestContext = new AsyncLocalStorage<RequestContext>();

@@ -1,14 +1,13 @@
-import { createHash } from "crypto";
 import type { SchemeNetworkFacilitator, FacilitatorContext } from "@x402/core/types";
 import type { VerifyResponse, SettleResponse } from "@x402/core/types";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import type { Network } from "@x402/core/types";
-import { getInvoice, deleteInvoice, acquireSettleLock, releaseSettleLock } from "./invoice-store";
+import { getInvoiceByInvoiceStr, deleteInvoice, acquireSettleLock, releaseSettleLock } from "./invoice-store";
 import { lookupInvoice } from "./nwc-client";
 
 export class LightningExactScheme implements SchemeNetworkFacilitator {
   readonly scheme = "exact";
-  readonly caipFamily = "lightning:*";
+  readonly caipFamily = "bip122:*";
 
   getExtra(_network: Network): Record<string, unknown> | undefined {
     return undefined;
@@ -23,49 +22,54 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
     requirements: PaymentRequirements,
     _context?: FacilitatorContext,
   ): Promise<VerifyResponse> {
-    const { preimage } = payload.payload as { preimage?: string };
-    const extra = requirements.extra as { paymentHash?: string };
-
-    if (!preimage) {
+    // Step 2: verify x402Version is 2
+    if (payload.x402Version !== 2) {
       return {
         isValid: false,
-        invalidReason: "missing_preimage",
-        invalidMessage: "Payment payload must include a preimage",
+        invalidReason: "invalid_version",
+        invalidMessage: `Unsupported x402Version: ${payload.x402Version}. Only version 2 is supported.`,
       };
     }
 
-    if (!extra.paymentHash) {
+    // Step 3: verify network matches
+    if (payload.accepted.network !== requirements.network) {
       return {
         isValid: false,
-        invalidReason: "missing_payment_hash",
-        invalidMessage: "Payment requirements must include a paymentHash in extra",
+        invalidReason: "network_mismatch",
+        invalidMessage: `Network in payload (${payload.accepted.network}) does not match requirements (${requirements.network})`,
       };
     }
 
-    // Verify cryptographically: sha256(preimage) == paymentHash (no network call)
-    let computedHash: string;
-    try {
-      computedHash = createHash("sha256")
-        .update(Buffer.from(preimage, "hex"))
-        .digest("hex");
-    } catch {
+    const { invoice: payloadInvoice } = payload.payload as { invoice?: string };
+    const extra = requirements.extra as { invoice?: string; paymentMethod?: string };
+
+    if (!payloadInvoice) {
       return {
         isValid: false,
-        invalidReason: "invalid_preimage",
-        invalidMessage: "Preimage must be a valid hex string",
+        invalidReason: "missing_invoice",
+        invalidMessage: "Payment payload must include the paid invoice",
       };
     }
 
-    if (computedHash !== extra.paymentHash) {
+    if (!extra.invoice) {
       return {
         isValid: false,
-        invalidReason: "invalid_preimage",
-        invalidMessage: "Preimage does not match payment hash",
+        invalidReason: "missing_invoice_in_requirements",
+        invalidMessage: "Payment requirements must include invoice in extra",
       };
     }
 
-    // Check invoice exists in store
-    const stored = await getInvoice(extra.paymentHash);
+    // Step 4: prevent invoice substitution attacks
+    if (payloadInvoice !== extra.invoice) {
+      return {
+        isValid: false,
+        invalidReason: "invoice_mismatch",
+        invalidMessage: "Invoice in payload does not match invoice in requirements",
+      };
+    }
+
+    // Verify invoice was issued by this server
+    const stored = await getInvoiceByInvoiceStr(payloadInvoice);
     if (!stored) {
       return {
         isValid: false,
@@ -84,17 +88,45 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
       };
     }
 
-    // Check amount — allow overpayment, reject underpayment
-    const requiredMsats = BigInt(requirements.amount) * 1000n;
-    if (BigInt(stored.amountMsats) < requiredMsats) {
+    // Check amount — requirements.amount is in millisatoshis; spec requires exact match
+    const amountStr = String(requirements.amount ?? "").trim();
+    if (!/^\d+$/.test(amountStr)) {
       return {
         isValid: false,
-        invalidReason: "amount_too_low",
-        invalidMessage: `Invoice amount ${stored.amountMsats} msats is less than required ${requiredMsats} msats`,
+        invalidReason: "invalid_amount",
+        invalidMessage: `Invalid amount in requirements: ${requirements.amount}`,
+      };
+    }
+    const requiredMsats = BigInt(amountStr);
+    if (BigInt(stored.amountMsats) !== requiredMsats) {
+      return {
+        isValid: false,
+        invalidReason: "amount_mismatch",
+        invalidMessage: `Invoice amount ${stored.amountMsats} msats does not match required ${requiredMsats} msats`,
       };
     }
 
-    return { isValid: true, payer: extra.paymentHash };
+    // Query Lightning node to verify payment was received
+    let result: Awaited<ReturnType<typeof lookupInvoice>>;
+    try {
+      result = await lookupInvoice(stored.nwcSecret, stored.paymentHash);
+    } catch (err) {
+      console.error("NWC lookupInvoice failed during verify:", err);
+      return {
+        isValid: false,
+        invalidReason: "nwc_lookup_failed",
+        invalidMessage: err instanceof Error ? err.message : "NWC lookup failed",
+      };
+    }
+    if (!result.settledAt) {
+      return {
+        isValid: false,
+        invalidReason: "payment_not_received",
+        invalidMessage: "Invoice has not been paid yet",
+      };
+    }
+
+    return { isValid: true, payer: "anonymous" };
   }
 
   async settle(
@@ -102,11 +134,30 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
     requirements: PaymentRequirements,
     _context?: FacilitatorContext,
   ): Promise<SettleResponse> {
-    const { preimage } = payload.payload as { preimage: string };
-    const extra = requirements.extra as { paymentHash: string };
+    const rawPayload = payload.payload as Record<string, unknown>;
+    const payloadInvoice = typeof rawPayload?.invoice === "string" ? rawPayload.invoice : "";
+    if (!payloadInvoice) {
+      return {
+        success: false,
+        errorReason: "missing_invoice",
+        errorMessage: "Payment payload must include the paid invoice",
+        transaction: "",
+        network: requirements.network,
+      };
+    }
 
-    // Retrieve the stored invoice to get the merchant's NWC connection secret
-    const stored = await getInvoice(extra.paymentHash);
+    const extra = requirements.extra as { invoice?: string };
+    if (extra.invoice && payloadInvoice !== extra.invoice) {
+      return {
+        success: false,
+        errorReason: "invoice_mismatch",
+        errorMessage: "Invoice in payload does not match invoice in requirements",
+        transaction: "",
+        network: requirements.network,
+      };
+    }
+
+    const stored = await getInvoiceByInvoiceStr(payloadInvoice);
     if (!stored) {
       return {
         success: false,
@@ -118,7 +169,7 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
     }
 
     // Atomic lock: prevent double-settle for the same invoice
-    const locked = await acquireSettleLock(extra.paymentHash);
+    const locked = await acquireSettleLock(stored.paymentHash);
     if (!locked) {
       return {
         success: false,
@@ -130,8 +181,7 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
     }
 
     try {
-      // Confirm the invoice is paid via the merchant's NWC wallet
-      const result = await lookupInvoice(stored.nwcSecret, extra.paymentHash);
+      const result = await lookupInvoice(stored.nwcSecret, stored.paymentHash);
       if (!result.settledAt) {
         return {
           success: false,
@@ -142,16 +192,20 @@ export class LightningExactScheme implements SchemeNetworkFacilitator {
         };
       }
 
-      await deleteInvoice(extra.paymentHash);
+      await deleteInvoice(stored.paymentHash);
 
       return {
         success: true,
-        transaction: preimage, // preimage is the canonical proof of payment in Lightning
+        transaction: stored.paymentHash, // SHA-256 payment hash (hex-encoded) per spec
         network: requirements.network,
-        payer: extra.paymentHash, // node pubkey not reliably available via NWC; use paymentHash as payer identity
+        payer: "anonymous",
+        extensions: {
+          invoice: payloadInvoice,
+          settledAt: result.settledAt,
+        },
       };
     } finally {
-      await releaseSettleLock(extra.paymentHash);
+      await releaseSettleLock(stored.paymentHash);
     }
   }
 }
