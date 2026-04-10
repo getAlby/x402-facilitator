@@ -148,6 +148,13 @@ export async function createApp() {
     });
   });
 
+  // GET /.well-known/402index-verify.txt — domain ownership verification for 402index.io
+  // Allows the Alby domain to be verified for instant listings approval on the 402 Index.
+  // https://402index.io/verify
+  app.get("/.well-known/402index-verify.txt", (_req: Request, res: Response) => {
+    res.type("text/plain").send("16089e2ebba2015d064ea38d1c0df8f98ab1b8fe809d3e8d685be77f359f6a06");
+  });
+
   // GET /supported — capability discovery
   app.get("/supported", (req: Request, res: Response) => {
     trackEvent(req, "supported");
