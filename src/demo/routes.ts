@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from "express";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { x402Facilitator } from "@x402/core/facilitator";
+import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { LightningSchemeNetworkServer } from "./lightning-server";
 import { requestContext } from "./request-context";
 import { lightningPaywallProvider } from "./paywall";
@@ -9,6 +10,21 @@ import { BITCOIN_MAINNET } from "../constants";
 export function createDemoRouter(facilitatorUrl: string, merchantId: string, facilitator: x402Facilitator) {
   const resourceServer = new x402ResourceServer(facilitator as never)
     .register(BITCOIN_MAINNET, new LightningSchemeNetworkServer(facilitatorUrl));
+
+  resourceServer.registerExtension(bazaarResourceServerExtension);
+
+  const { bazaar } = declareDiscoveryExtension({
+    input: {},
+    inputSchema: { properties: {} },
+    output: {
+      schema: { description: "A random Satoshi Nakamoto quote" },
+      example: {
+        quote: "The root problem with conventional currency is all the trust that's required to make it work.",
+        attribution: "Satoshi Nakamoto",
+        timestamp: new Date(0).toISOString(),
+      },
+    },
+  });
 
   const routes = {
     "GET /quote": {
@@ -22,6 +38,7 @@ export function createDemoRouter(facilitatorUrl: string, merchantId: string, fac
       },
       description: "Pay 1 sat to unlock a random Satoshi Nakamoto quote",
       mimeType: "application/json",
+      extensions: { bazaar },
     },
   };
 
