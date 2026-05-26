@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@getalby/lightning-tools": "^7.0.2",
-    "@getalby/sdk": "^7.0.0",
+    "@getalby/sdk": "^8.0.3",
     "@x402/core": "2.10.0",
     "@x402/express": "2.10.0",
     "@x402/extensions": "2.10.0",
