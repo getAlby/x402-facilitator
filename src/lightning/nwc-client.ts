@@ -9,9 +9,6 @@ function getClient(nwcSecret: string): NWCClient {
   let client = clientCache.get(nwcSecret);
   if (!client) {
     client = new NWCClient({ nostrWalletConnectUrl: nwcSecret });
-    // Detect silently-dead relay websockets so ReconnectingPool can recover
-    // instead of leaving the cached client wedged until a process restart.
-    client.pool.enablePing = true;
     clientCache.set(nwcSecret, client);
   }
   return client;
